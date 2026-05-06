@@ -455,56 +455,26 @@ interface Message {
   sent_at: string | null;
 }
 
-const TRIGGER_OPTIONS = [
-  "Handmatig",
-  "Na bezichtiging",
-  "Bod ontvangen",
-  "Financieringsvoorbehoud follow-up",
-  "Document ondertekening herinnering",
-  "Overdracht herinnering",
-  "Na overdracht",
-];
-
-const AUTO_TRIGGERS = [
-  { emoji: "🏠", label: "Welkomstbericht bij aanmaken deal" },
-  { emoji: "⏰", label: "Bezichtiging herinnering (24u van tevoren)" },
-  { emoji: "📝", label: "Follow-up na bezichtiging (2u na bezoek)" },
-  { emoji: "📋", label: "Document ondertekening herinnering (3 dagen)" },
-  { emoji: "🔑", label: "Overdracht herinnering (3 dagen voor datum)" },
-];
-
 const STATUS_BADGE: Record<string, { bg: string; color: string; label: string }> = {
-  concept:  { bg: "#fef9c3", color: "#854d0e", label: "Concept" },
-  gepland:  { bg: "#dbeafe", color: "#1e40af", label: "Gepland" },
-  verzonden:{ bg: "#dcfce7", color: "#14532d", label: "Verzonden" },
-  mislukt:  { bg: "#fee2e2", color: "#991b1b", label: "Mislukt" },
+  concept:   { bg: "#fef9c3", color: "#854d0e", label: "Concept" },
+  gepland:   { bg: "#dbeafe", color: "#1e40af", label: "Gepland" },
+  verzonden: { bg: "#dcfce7", color: "#14532d", label: "Verzonden" },
+  mislukt:   { bg: "#fee2e2", color: "#991b1b", label: "Mislukt" },
 };
-
-function fmtDateTime(d: string | null) {
-  if (!d) return null;
-  return new Date(d).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-}
 
 function WhatsAppSection({ deal, dealId }: { deal: DealWithContacts; dealId: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showCompose, setShowCompose] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<"alle" | "concept" | "gepland" | "verzonden">("alle");
-  const [triggerToggles, setTriggerToggles] = useState(AUTO_TRIGGERS.map(() => true));
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-
   const [recipientId, setRecipientId] = useState("");
-  const [triggerEvent, setTriggerEvent] = useState("Handmatig");
   const [messageText, setMessageText] = useState("");
-  const [sendMode, setSendMode] = useState<"nu" | "inplannen">("nu");
-  const [scheduledAt, setScheduledAt] = useState("");
   const [generatingAI, setGeneratingAI] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(false);
 
   const recipients = [
-    deal.buyer_id && deal.buyer ? { id: deal.buyer_id, name: deal.buyer.name, phone: deal.buyer.phone ?? "", label: "Koper" } : null,
-    deal.seller_id && deal.seller ? { id: deal.seller_id, name: deal.seller.name, phone: deal.seller.phone ?? "", label: "Verkoper" } : null,
-  ].filter(Boolean) as { id: string; name: string; phone: string; label: string }[];
+    deal.buyer_id && deal.buyer ? { id: deal.buyer_id, name: deal.buyer.name, label: "Koper" } : null,
+    deal.seller_id && deal.seller ? { id: deal.seller_id, name: deal.seller.name, label: "Verkoper" } : null,
+  ].filter(Boolean) as { id: string; name: string; label: string }[];
 
   const loadMessages = useCallback(async () => {
     const supabase = createClient();
@@ -531,7 +501,7 @@ function WhatsAppSection({ deal, dealId }: { deal: DealWithContacts; dealId: str
           dealAddress: deal.address ?? "",
           dealCity: deal.city ?? "",
           recipientName: selectedRecipient.name,
-          triggerEvent,
+          triggerEvent: "Handmatig",
           agentName: "Uw makelaar",
         }),
       });
@@ -548,30 +518,23 @@ function WhatsAppSection({ deal, dealId }: { deal: DealWithContacts; dealId: str
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
-
     await supabase.from("messages").insert({
       owner_id: user.id,
       deal_id: dealId,
-      contact_id: (selectedRecipient?.id ?? null),
+      contact_id: selectedRecipient?.id ?? null,
       channel: "whatsapp",
       content: messageText,
       status: "concept",
-      trigger_event: triggerEvent,
-      scheduled_at: sendMode === "inplannen" && scheduledAt ? scheduledAt : null,
+      trigger_event: null,
+      scheduled_at: null,
     });
-
     setMessageText("");
-    setTriggerEvent("Handmatig");
-    setSendMode("nu");
-    setScheduledAt("");
     setShowCompose(false);
     await loadMessages();
     setSaving(false);
     setToast(true);
     setTimeout(() => setToast(false), 2500);
   }
-
-  const filtered = activeFilter === "alle" ? messages : messages.filter((m) => m.status === activeFilter);
 
   const inpStyle: React.CSSProperties = {
     width: "100%", padding: "9px 12px", border: "1px solid #e8ecf0", borderRadius: "8px",
@@ -580,44 +543,33 @@ function WhatsAppSection({ deal, dealId }: { deal: DealWithContacts; dealId: str
   };
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: "680px", position: "relative" }}>
+    <div style={{ padding: "20px 24px", maxWidth: "640px" }}>
       {toast && (
         <div style={{ position: "fixed", bottom: "24px", right: "24px", background: "#0f172a", color: "#fff", padding: "12px 18px", borderRadius: "10px", fontSize: "13px", fontWeight: "600", zIndex: 999, boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}>
           Opgeslagen ✓
         </div>
       )}
 
-      {/* Header */}
+      {/* 1. Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-        <span style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>WhatsApp Automation</span>
+        <span style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>WhatsApp</span>
         <button onClick={() => setShowCompose(!showCompose)} style={{ padding: "7px 14px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
           + Bericht opstellen
         </button>
       </div>
 
-      {/* Compose form */}
+      {/* 2. Compose form */}
       {showCompose && (
         <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "12px", padding: "16px", marginBottom: "16px" }}>
           <div style={{ fontSize: "10px", fontWeight: "700", color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "12px" }}>Nieuw bericht</div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
-            <div>
-              <label style={{ display: "block", fontSize: "10px", fontWeight: "500", color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px" }}>Ontvanger</label>
-              <select value={recipientId} onChange={(e) => setRecipientId(e.target.value)} style={inpStyle}>
-                {recipients.map((r) => (
-                  <option key={r.id} value={r.id}>{r.label}: {r.name} {r.phone ? `(${r.phone})` : ""}</option>
-                ))}
-                <option value="notaris">Notaris</option>
-                <option value="bank">Bank</option>
-                <option value="anders">Anders</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: "10px", fontWeight: "500", color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px" }}>Trigger event</label>
-              <select value={triggerEvent} onChange={(e) => setTriggerEvent(e.target.value)} style={inpStyle}>
-                {TRIGGER_OPTIONS.map((t) => <option key={t}>{t}</option>)}
-              </select>
-            </div>
+          <div style={{ marginBottom: "10px" }}>
+            <label style={{ display: "block", fontSize: "10px", fontWeight: "500", color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px" }}>Ontvanger</label>
+            <select value={recipientId} onChange={(e) => setRecipientId(e.target.value)} style={inpStyle}>
+              {recipients.map((r) => (
+                <option key={r.id} value={r.id}>{r.label}: {r.name}</option>
+              ))}
+            </select>
           </div>
 
           <div style={{ marginBottom: "8px" }}>
@@ -631,114 +583,45 @@ function WhatsAppSection({ deal, dealId }: { deal: DealWithContacts; dealId: str
             />
           </div>
 
-          <button onClick={handleGenerateAI} disabled={generatingAI} style={{ padding: "5px 12px", background: "#fff", border: "1px solid #e8ecf0", borderRadius: "6px", fontSize: "11px", color: "#0284c7", cursor: "pointer", marginBottom: "14px", opacity: generatingAI ? 0.6 : 1 }}>
-            {generatingAI ? "Genereren…" : "✦ AI genereer bericht"}
-          </button>
-
-          <div style={{ display: "flex", gap: "6px", marginBottom: "12px" }}>
-            {(["nu", "inplannen"] as const).map((m) => (
-              <button key={m} onClick={() => setSendMode(m)} style={{ padding: "7px 14px", borderRadius: "8px", border: "1px solid", fontSize: "12px", fontWeight: "500", cursor: "pointer", background: sendMode === m ? "#0284c7" : "#fff", color: sendMode === m ? "#fff" : "#64748b", borderColor: sendMode === m ? "#0284c7" : "#e8ecf0" }}>
-                {m === "nu" ? "Nu versturen" : "Inplannen"}
-              </button>
-            ))}
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px" }}>
+            <button onClick={handleGenerateAI} disabled={generatingAI} style={{ padding: "6px 12px", background: "#fff", border: "1px solid #bae6fd", borderRadius: "6px", fontSize: "11px", color: "#0284c7", cursor: "pointer", fontWeight: "500", opacity: generatingAI ? 0.6 : 1 }}>
+              {generatingAI ? "Genereren…" : "✦ AI genereer"}
+            </button>
           </div>
 
-          {sendMode === "inplannen" && (
-            <div style={{ marginBottom: "12px" }}>
-              <label style={{ display: "block", fontSize: "10px", fontWeight: "500", color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px" }}>Versturen op</label>
-              <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} style={inpStyle} />
-            </div>
-          )}
-
           <button onClick={handleSave} disabled={saving || !messageText.trim()} style={{ width: "100%", background: "#0284c7", border: "none", borderRadius: "8px", padding: "10px", fontSize: "13px", fontWeight: "600", color: "#fff", cursor: "pointer", opacity: saving || !messageText.trim() ? 0.5 : 1, fontFamily: "DM Sans, Helvetica Neue, sans-serif" }}>
-            {saving ? "Opslaan…" : "Opslaan in wachtrij"}
+            {saving ? "Opslaan…" : "Opslaan"}
           </button>
         </div>
       )}
 
-      {/* Automation triggers banner */}
-      <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px 16px", marginBottom: "16px" }}>
-        <div style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "12px" }}>
-          Automatische triggers — actief voor deze deal
-        </div>
-        {AUTO_TRIGGERS.map((t, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "7px 0", borderBottom: i < AUTO_TRIGGERS.length - 1 ? "1px solid #f8fafc" : "none" }}>
-            <div
-              onClick={() => setTriggerToggles((prev) => prev.map((v, idx) => idx === i ? !v : v))}
-              style={{ width: "32px", height: "18px", borderRadius: "9px", background: triggerToggles[i] ? "#0284c7" : "#e2e8f0", cursor: "pointer", flexShrink: 0, position: "relative", transition: "background 0.2s" }}
-            >
-              <div style={{ position: "absolute", top: "3px", left: triggerToggles[i] ? "17px" : "3px", width: "12px", height: "12px", borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
-            </div>
-            <span style={{ fontSize: "12px", color: "#0f172a", flex: 1 }}>{t.emoji} {t.label}</span>
-            <span style={{ fontSize: "10px", color: triggerToggles[i] ? "#16a34a" : "#94a3b8" }}>{triggerToggles[i] ? "Actief" : "Uit"}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Message list header + filter */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-        <span style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>Berichten wachtrij</span>
-        <div style={{ display: "flex", gap: "4px" }}>
-          {(["alle", "concept", "gepland", "verzonden"] as const).map((f) => (
-            <button key={f} onClick={() => setActiveFilter(f)} style={{ padding: "4px 9px", borderRadius: "20px", fontSize: "11px", fontWeight: activeFilter === f ? "600" : "400", color: activeFilter === f ? "#0284c7" : "#64748b", background: activeFilter === f ? "#f0f9ff" : "#f8fafc", border: activeFilter === f ? "1px solid #0284c7" : "1px solid #e8ecf0", cursor: "pointer" }}>
-              {f.charAt(0).toUpperCase() + f.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Empty state */}
+      {/* 3/4. Message list or empty state */}
       {messages.length === 0 ? (
-        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "40px", textAlign: "center" }}>
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto" }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-          <div style={{ fontSize: "14px", color: "#94a3b8", marginTop: "12px", marginBottom: "16px" }}>Nog geen berichten voor deze deal</div>
+        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "48px 24px", textAlign: "center" }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 12px" }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+          <div style={{ fontSize: "14px", color: "#94a3b8", marginBottom: "16px" }}>Nog geen berichten voor deze deal</div>
           <button onClick={() => setShowCompose(true)} style={{ padding: "8px 16px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
             + Eerste bericht opstellen
           </button>
         </div>
       ) : (
-        <div>
-          {filtered.map((msg) => {
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {messages.map((msg) => {
             const badge = STATUS_BADGE[msg.status] ?? STATUS_BADGE.concept;
             const recipient = recipients.find((r) => r.id === msg.contact_id);
-            const expanded = expandedIds.has(msg.id);
-            const isLong = msg.content.length > 120;
             return (
-              <div key={msg.id} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px 16px", marginBottom: "8px" }}>
+              <div key={msg.id} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px 16px" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "8px" }}>
                   <div>
                     <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{recipient?.name ?? "Onbekend"}</div>
-                    <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>{msg.trigger_event ?? "Handmatig"}</div>
+                    {msg.trigger_event && <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>{msg.trigger_event}</div>}
                   </div>
-                  <span style={{ padding: "3px 8px", borderRadius: "20px", fontSize: "11px", fontWeight: "600", background: badge.bg, color: badge.color }}>{badge.label}</span>
+                  <span style={{ padding: "3px 8px", borderRadius: "20px", fontSize: "11px", fontWeight: "600", background: badge.bg, color: badge.color, flexShrink: 0 }}>{badge.label}</span>
                 </div>
 
-                <div style={{ background: "#dcfce7", borderRadius: "4px 12px 12px 12px", padding: "10px 14px", fontSize: "12px", color: "#0f172a", maxWidth: "85%", marginBottom: "8px", lineHeight: "1.5" }}>
-                  {isLong && !expanded ? msg.content.slice(0, 120) + "…" : msg.content}
-                  {isLong && (
-                    <button onClick={() => setExpandedIds((s) => { const n = new Set(s); expanded ? n.delete(msg.id) : n.add(msg.id); return n; })} style={{ display: "block", marginTop: "4px", fontSize: "11px", color: "#0284c7", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                      {expanded ? "Minder tonen" : "Meer tonen"}
-                    </button>
-                  )}
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: "11px", color: "#94a3b8" }}>
-                    {msg.status === "gepland" && msg.scheduled_at ? `Gepland voor ${fmtDateTime(msg.scheduled_at)}` :
-                     msg.status === "verzonden" && msg.sent_at ? `Verzonden op ${fmtDateTime(msg.sent_at)}` :
-                     "Concept — nog niet gepland"}
-                  </span>
-                  <div style={{ display: "flex", gap: "6px" }}>
-                    {(msg.status === "concept" || msg.status === "gepland") && (
-                      <>
-                        <button style={{ padding: "5px 10px", background: "#fff", border: "1px solid #e8ecf0", borderRadius: "6px", fontSize: "11px", color: "#64748b", cursor: "pointer" }}>Bewerken</button>
-                        <button onClick={() => console.log("Versturen via 360dialog:", msg.id)} style={{ padding: "5px 10px", background: "#0284c7", border: "none", borderRadius: "6px", fontSize: "11px", color: "#fff", cursor: "pointer", fontWeight: "600" }}>Nu versturen</button>
-                      </>
-                    )}
-                    {msg.status === "verzonden" && (
-                      <button onClick={() => console.log("Opnieuw sturen:", msg.id)} style={{ padding: "5px 10px", background: "#fff", border: "1px solid #e8ecf0", borderRadius: "6px", fontSize: "11px", color: "#64748b", cursor: "pointer" }}>Opnieuw sturen</button>
-                    )}
-                  </div>
+                {/* WhatsApp bubble */}
+                <div style={{ background: "#dcfce7", borderRadius: "4px 12px 12px 12px", padding: "10px 14px", fontSize: "12px", color: "#0f172a", maxWidth: "85%", lineHeight: "1.5" }}>
+                  {msg.content}
                 </div>
               </div>
             );
