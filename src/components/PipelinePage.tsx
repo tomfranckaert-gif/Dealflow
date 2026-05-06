@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { DealWithContacts, DealStage } from "@/types/database";
 
@@ -47,26 +48,27 @@ function StageBadge({ stage }: { stage: DealStage }) {
   );
 }
 
-function DealCard({ deal, selected, onClick }: { deal: DealWithContacts; selected: boolean; onClick: () => void }) {
+function DealCard({ deal, onClick }: { deal: DealWithContacts; onClick: () => void }) {
   const urgent = isUrgent(deal);
   const days = daysSince(deal.created_at);
   const progress = ((stageIndex(deal.stage as DealStage) + 1) / STAGES.length) * 100;
+  const [hovered, setHovered] = useState(false);
 
   return (
     <div
       onClick={onClick}
       style={{
         background: "#ffffff",
-        border: selected ? "1px solid #0284c7" : "1px solid #e8ecf0",
-        boxShadow: selected ? "0 0 0 3px rgba(2,132,199,0.1)" : "0 1px 3px rgba(0,0,0,0.04)",
+        border: "1px solid #e8ecf0",
+        boxShadow: hovered ? "0 4px 12px rgba(0,0,0,0.06)" : "0 1px 3px rgba(0,0,0,0.04)",
         borderRadius: "12px",
         padding: "14px 16px",
         cursor: "pointer",
         marginBottom: "8px",
-        transition: "border-color 0.15s, box-shadow 0.15s",
+        transition: "box-shadow 0.15s",
       }}
-      onMouseEnter={(e) => { if (!selected) e.currentTarget.style.borderColor = "#cbd5e1"; }}
-      onMouseLeave={(e) => { if (!selected) e.currentTarget.style.borderColor = "#e8ecf0"; }}
+      onMouseEnter={(e) => { setHovered(true); e.currentTarget.style.borderColor = "#cbd5e1"; }}
+      onMouseLeave={(e) => { setHovered(false); e.currentTarget.style.borderColor = "#e8ecf0"; }}
     >
       {/* Row 1: address + price */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
@@ -103,102 +105,14 @@ function DealCard({ deal, selected, onClick }: { deal: DealWithContacts; selecte
   );
 }
 
-function DetailPanel({ deal, onClose }: { deal: DealWithContacts; onClose: () => void }) {
-  const days = daysSince(deal.created_at);
-  const stageIdx = stageIndex(deal.stage as DealStage);
-
-  const ACTIONS = [
-    { label: "Document genereren", color: "#0284c7", bg: "#f0f9ff", border: "rgba(2,132,199,0.2)" },
-    { label: "WhatsApp sturen",    color: "#16a34a", bg: "#f0fdf4", border: "rgba(22,163,74,0.2)" },
-    { label: "Kadaster check",     color: "#7c3aed", bg: "#f5f3ff", border: "rgba(124,58,237,0.2)" },
-    { label: "Voorwaarden",        color: "#ef4444", bg: "#fff1f2", border: "rgba(239,68,68,0.2)" },
-  ];
-
-  const ACTIVITY = [
-    { text: "Deal aangemaakt",           time: `${days}d geleden`,  color: "#0284c7" },
-    { text: "Bezichtiging ingepland",    time: `${Math.max(days-2,0)}d geleden`, color: "#eab308" },
-    { text: "Bod ingediend",             time: `${Math.max(days-4,0)}d geleden`, color: "#3b82f6" },
-    { text: "Koopakte in voorbereiding", time: "gisteren",           color: "#8b5cf6" },
-  ].slice(0, stageIdx + 1 > 3 ? 4 : stageIdx + 1);
-
-  return (
-    <div style={{ flex: 1, background: "#f8fafc", overflowY: "auto", padding: "20px 24px" }}>
-      {/* Header card */}
-      <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px 20px", marginBottom: "12px" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "12px" }}>
-          <div>
-            <h2 style={{ fontSize: "20px", fontWeight: "700", color: "#0f172a", letterSpacing: "-0.5px", margin: "0 0 4px" }}>{deal.address ?? deal.title}</h2>
-            <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>{[deal.city, deal.property_type].filter(Boolean).join(" · ")}</p>
-          </div>
-          <button onClick={onClose} style={{ background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: "8px", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#64748b", flexShrink: 0 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-          </button>
-        </div>
-
-        {/* Stage progress */}
-        <div style={{ height: "4px", background: "#f1f5f9", borderRadius: "2px", marginBottom: "6px", position: "relative" }}>
-          {STAGES.map((s, i) => (
-            <div key={s.id} style={{ position: "absolute", left: `${(i / STAGES.length) * 100}%`, width: `${100 / STAGES.length}%`, height: "100%", background: i <= stageIdx ? "#0284c7" : "transparent", borderRadius: i === 0 ? "2px 0 0 2px" : i === STAGES.length - 1 ? "0 2px 2px 0" : "0" }} />
-          ))}
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          {STAGES.map((s, i) => (
-            <span key={s.id} style={{ fontSize: "9px", color: i <= stageIdx ? "#0284c7" : "#94a3b8", fontWeight: i === stageIdx ? "600" : "400" }}>{s.short}</span>
-          ))}
-        </div>
-      </div>
-
-      {/* Info grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
-        {[
-          { label: "Koopsom",    value: deal.agreed_price ? formatEuro(deal.agreed_price) : "—", icon: "💶" },
-          { label: "Koper",      value: deal.buyer?.name ?? "—", icon: "👤" },
-          { label: "Looptijd",   value: `${days} dagen`, icon: "📅" },
-          { label: "Voortgang",  value: `${Math.round(((stageIdx + 1) / STAGES.length) * 100)}%`, icon: "📊" },
-        ].map((item) => (
-          <div key={item.label} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "10px", padding: "12px 14px" }}>
-            <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>{item.icon} {item.label}</div>
-            <div style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a" }}>{item.value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Quick actions */}
-      <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px 16px", marginBottom: "12px" }}>
-        <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "10px" }}>Snelle acties</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-          {ACTIONS.map((a) => (
-            <button key={a.label} style={{ padding: "8px 10px", background: a.bg, border: `1px solid ${a.border}`, borderRadius: "8px", color: a.color, fontSize: "12px", fontWeight: "600", cursor: "pointer", textAlign: "left" }}>
-              {a.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Activity feed */}
-      <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px 16px" }}>
-        <div style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>Activiteit</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          {ACTIVITY.map((a, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: a.color, flexShrink: 0 }} />
-              <span style={{ fontSize: "13px", color: "#0f172a", flex: 1 }}>{a.text}</span>
-              <span style={{ fontSize: "11px", color: "#94a3b8" }}>{a.time}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 interface Props {
   deals: DealWithContacts[];
 }
 
 export default function PipelinePage({ deals }: Props) {
+  const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<DealStage | "alle">("alle");
-  const [selectedDeal, setSelectedDeal] = useState<DealWithContacts | null>(null);
 
   const filtered = activeFilter === "alle" ? deals : deals.filter((d) => d.stage === activeFilter);
   const totalValue = deals.filter((d) => d.stage !== "gesloten").reduce((s, d) => s + (d.agreed_price ?? d.value ?? 0), 0);
@@ -243,8 +157,7 @@ export default function PipelinePage({ deals }: Props) {
 
       {/* Content */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* Left: filter + cards */}
-        <div style={{ width: selectedDeal ? "380px" : "100%", minWidth: selectedDeal ? "380px" : undefined, display: "flex", flexDirection: "column", borderRight: selectedDeal ? "1px solid #e8ecf0" : "none", transition: "width 0.2s", overflow: "hidden" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {/* Filter pills */}
           <div style={{ padding: "12px 16px", background: "#fff", borderBottom: "1px solid #e8ecf0", display: "flex", gap: "6px", overflowX: "auto", flexShrink: 0 }}>
             {[{ id: "alle", label: "Alle", count: deals.length }, ...STAGES.map((s) => ({ id: s.id, label: s.label, count: deals.filter((d) => d.stage === s.id).length }))].map((f) => {
@@ -276,16 +189,12 @@ export default function PipelinePage({ deals }: Props) {
                 <DealCard
                   key={deal.id}
                   deal={deal}
-                  selected={selectedDeal?.id === deal.id}
-                  onClick={() => setSelectedDeal(selectedDeal?.id === deal.id ? null : deal)}
+                  onClick={() => router.push(`/dashboard/${deal.id}`)}
                 />
               ))
             )}
           </div>
         </div>
-
-        {/* Right: detail panel */}
-        {selectedDeal && <DetailPanel deal={selectedDeal} onClose={() => setSelectedDeal(null)} />}
       </div>
     </div>
   );
