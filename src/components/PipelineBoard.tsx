@@ -145,7 +145,7 @@ export default function PipelineBoard({ initialDeals, userEmail }: Props) {
       <div className="min-h-screen bg-gray-950 text-white flex flex-col">
         <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-6">
-            <h1 className="text-xl font-bold">Dealflow</h1>
+            <h1 className="text-xl font-bold">Transactly.nl</h1>
             <div className="hidden sm:flex items-center gap-1 text-sm text-gray-400">
               <span>Pipeline:</span>
               <span className="text-indigo-400 font-medium">€{totalPipelineValue.toLocaleString("nl-NL")}</span>

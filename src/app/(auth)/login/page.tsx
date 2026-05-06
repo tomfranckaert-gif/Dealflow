@@ -35,7 +35,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-white">Inloggen</h1>
-          <p className="mt-2 text-gray-400">Welkom terug bij Dealflow</p>
+          <p className="mt-2 text-gray-400">Welkom terug bij Transactly.nl</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
