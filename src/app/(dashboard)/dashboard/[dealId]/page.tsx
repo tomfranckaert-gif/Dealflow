@@ -63,65 +63,51 @@ const SUB_NAV: { id: SubNav; label: string; icon: React.ReactNode }[] = [
 interface WwftEntry {
   id: string;
   contact_id: string;
-  document_type: string;
-  document_number: string;
-  issue_date: string;
-  expiry_date: string;
-  birth_date: string;
-  bsn: string;
-  address: string;
   risk_score: "laag" | "middel" | "hoog";
-  pep: boolean;
-  sanctions_checked: boolean;
-  financing_type: string;
-  mortgage_lender: string;
-  own_funds_source: string;
-  notes: string;
+  pep_check: boolean;
+  sanctions_check: boolean;
+  funding_source: string | null;
   verified_at: string | null;
+  retention_until: string | null;
 }
 
-type WwftForm = Omit<WwftEntry, "id" | "contact_id" | "verified_at">;
+interface WwftForm {
+  risk_score: "laag" | "middel" | "hoog";
+  pep_check: boolean;
+  sanctions_check: boolean;
+  financing_type: string;
+  bank: string;
+  mortgage_amount: string;
+  own_funds: string;
+  own_funds_source: string;
+}
 
 function emptyForm(): WwftForm {
   return {
-    document_type: "Paspoort",
-    document_number: "",
-    issue_date: "",
-    expiry_date: "",
-    birth_date: "",
-    bsn: "",
-    address: "",
     risk_score: "laag",
-    pep: false,
-    sanctions_checked: false,
+    pep_check: false,
+    sanctions_check: false,
     financing_type: "Hypotheek",
-    mortgage_lender: "",
-    own_funds_source: "Spaargeld",
-    notes: "",
+    bank: "",
+    mortgage_amount: "",
+    own_funds: "",
+    own_funds_source: "",
   };
 }
 
 function entryToForm(e: WwftEntry): WwftForm {
+  let funding: Partial<WwftForm> = {};
+  try { if (e.funding_source) funding = JSON.parse(e.funding_source); } catch {}
   return {
-    document_type: e.document_type ?? "Paspoort",
-    document_number: e.document_number ?? "",
-    issue_date: e.issue_date ?? "",
-    expiry_date: e.expiry_date ?? "",
-    birth_date: e.birth_date ?? "",
-    bsn: e.bsn ?? "",
-    address: e.address ?? "",
     risk_score: e.risk_score ?? "laag",
-    pep: e.pep ?? false,
-    sanctions_checked: e.sanctions_checked ?? false,
-    financing_type: e.financing_type ?? "Hypotheek",
-    mortgage_lender: e.mortgage_lender ?? "",
-    own_funds_source: e.own_funds_source ?? "Spaargeld",
-    notes: e.notes ?? "",
+    pep_check: e.pep_check ?? false,
+    sanctions_check: e.sanctions_check ?? false,
+    financing_type: (funding as WwftForm).financing_type ?? "Hypotheek",
+    bank: (funding as WwftForm).bank ?? "",
+    mortgage_amount: (funding as WwftForm).mortgage_amount ?? "",
+    own_funds: (funding as WwftForm).own_funds ?? "",
+    own_funds_source: (funding as WwftForm).own_funds_source ?? "",
   };
-}
-
-function isComplete(form: WwftForm) {
-  return !!(form.document_type && form.document_number && form.issue_date && form.expiry_date && form.birth_date && form.bsn);
 }
 
 function fmtDate(d: string | null) {
@@ -131,12 +117,18 @@ function fmtDate(d: string | null) {
 
 const inp: React.CSSProperties = {
   width: "100%", padding: "9px 12px", border: "1px solid #e8ecf0", borderRadius: "8px",
-  fontSize: "13px", color: "#0f172a", background: "#fff", outline: "none", boxSizing: "border-box",
-  fontFamily: "DM Sans, Helvetica Neue, sans-serif",
+  fontSize: "13px", color: "#0f172a", background: "#fff", outline: "none",
+  boxSizing: "border-box", fontFamily: "DM Sans, Helvetica Neue, sans-serif",
 };
 const lbl: React.CSSProperties = {
   display: "block", fontSize: "10px", fontWeight: "500", color: "#94a3b8",
   textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px",
+};
+
+const RISK_EXPLANATION: Record<string, { bg: string; color: string; border: string; text: string }> = {
+  laag:   { bg: "#f0fdf4", color: "#16a34a", border: "#bbf7d0", text: "Standaard transactie — geen bijzonderheden" },
+  middel: { bg: "#fef9c3", color: "#854d0e", border: "#fde047", text: "Verhoogd risico — extra documentatie vereist" },
+  hoog:   { bg: "#fee2e2", color: "#991b1b", border: "#fca5a5", text: "Hoog risico — overweeg FIU melding via fiu.nl" },
 };
 
 function WwftSection({ deal, dealId }: { deal: DealWithContacts; dealId: string }) {
@@ -145,25 +137,18 @@ function WwftSection({ deal, dealId }: { deal: DealWithContacts; dealId: string 
   const [sellerEntry, setSellerEntry] = useState<WwftEntry | null>(null);
   const [buyerForm, setBuyerForm] = useState<WwftForm>(emptyForm());
   const [sellerForm, setSellerForm] = useState<WwftForm>(emptyForm());
+  const [buyerMockVerified, setBuyerMockVerified] = useState(false);
+  const [sellerMockVerified, setSellerMockVerified] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [toast, setToast] = useState(false);
 
   const loadEntries = useCallback(async () => {
     const supabase = createClient();
-    const { data } = await supabase
-      .from("wwft_entries")
-      .select("*")
-      .eq("deal_id", dealId);
+    const { data } = await supabase.from("wwft_entries").select("*").eq("deal_id", dealId);
     if (!data) return;
     for (const e of data) {
-      if (deal.buyer_id && e.contact_id === deal.buyer_id) {
-        setBuyerEntry(e);
-        setBuyerForm(entryToForm(e));
-      }
-      if (deal.seller_id && e.contact_id === deal.seller_id) {
-        setSellerEntry(e);
-        setSellerForm(entryToForm(e));
-      }
+      if (deal.buyer_id && e.contact_id === deal.buyer_id) { setBuyerEntry(e); setBuyerForm(entryToForm(e)); }
+      if (deal.seller_id && e.contact_id === deal.seller_id) { setSellerEntry(e); setSellerForm(entryToForm(e)); }
     }
   }, [dealId, deal.buyer_id, deal.seller_id]);
 
@@ -171,15 +156,16 @@ function WwftSection({ deal, dealId }: { deal: DealWithContacts; dealId: string 
 
   const currentEntry = activeParty === "buyer" ? buyerEntry : sellerEntry;
   const currentForm = activeParty === "buyer" ? buyerForm : sellerForm;
-  const setCurrentForm = activeParty === "buyer"
-    ? (f: WwftForm | ((p: WwftForm) => WwftForm)) => setBuyerForm(f)
-    : (f: WwftForm | ((p: WwftForm) => WwftForm)) => setSellerForm(f);
+  const setCurrentForm = (updater: (f: WwftForm) => WwftForm) =>
+    activeParty === "buyer" ? setBuyerForm(updater) : setSellerForm(updater);
   const currentContact = activeParty === "buyer" ? deal.buyer : deal.seller;
   const currentContactId = activeParty === "buyer" ? deal.buyer_id : deal.seller_id;
+  const mockVerified = activeParty === "buyer" ? buyerMockVerified : sellerMockVerified;
+  const setMockVerified = activeParty === "buyer" ? setBuyerMockVerified : setSellerMockVerified;
 
-  const buyerComplete = isComplete(buyerForm) && !!buyerEntry?.verified_at;
-  const sellerComplete = isComplete(sellerForm) && !!sellerEntry?.verified_at;
-  const compliant = buyerComplete && sellerComplete;
+  const compliant = buyerMockVerified && sellerMockVerified && !!buyerEntry && !!sellerEntry;
+  const showsHypotheek = ["Hypotheek", "Combinatie"].includes(currentForm.financing_type);
+  const showsEigenMiddelen = ["Eigen middelen", "Combinatie"].includes(currentForm.financing_type);
 
   async function handleSave() {
     if (!currentContactId) return;
@@ -188,11 +174,27 @@ function WwftSection({ deal, dealId }: { deal: DealWithContacts; dealId: string 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
 
+    const retentionUntil = new Date();
+    retentionUntil.setFullYear(retentionUntil.getFullYear() + 5);
+
+    const funding_source = JSON.stringify({
+      type: currentForm.financing_type,
+      bank: currentForm.bank,
+      mortgage_amount: currentForm.mortgage_amount,
+      own_funds: currentForm.own_funds,
+      own_funds_source: currentForm.own_funds_source,
+    });
+
     const payload = {
       owner_id: user.id,
       deal_id: dealId,
       contact_id: currentContactId,
-      ...currentForm,
+      risk_score: currentForm.risk_score,
+      pep_check: currentForm.pep_check,
+      sanctions_check: currentForm.sanctions_check,
+      funding_source,
+      verified_at: new Date().toISOString(),
+      retention_until: retentionUntil.toISOString(),
     };
 
     if (currentEntry) {
@@ -202,53 +204,40 @@ function WwftSection({ deal, dealId }: { deal: DealWithContacts; dealId: string 
     }
     await loadEntries();
     setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setToast(true);
+    setTimeout(() => setToast(false), 2500);
   }
 
-  async function handleVerify() {
-    if (!currentEntry) { await handleSave(); return; }
-    const supabase = createClient();
-    await supabase.from("wwft_entries").update({ verified_at: new Date().toISOString() }).eq("id", currentEntry.id);
-    await loadEntries();
-  }
-
-  const riskColors: Record<string, { bg: string; text: string }> = {
-    laag:   { bg: "#dcfce7", text: "#16a34a" },
-    middel: { bg: "#fef9c3", text: "#854d0e" },
-    hoog:   { bg: "#fee2e2", text: "#991b1b" },
-  };
   const avatarGradient = activeParty === "buyer"
     ? "linear-gradient(135deg, #0ea5e9, #0284c7)"
     : "linear-gradient(135deg, #818cf8, #6366f1)";
-
   const initial = currentContact?.name?.charAt(0)?.toUpperCase() ?? "?";
+  const risk = RISK_EXPLANATION[currentForm.risk_score];
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: "720px" }}>
+    <div style={{ padding: "20px 24px", maxWidth: "680px", position: "relative" }}>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{ position: "fixed", bottom: "24px", right: "24px", background: "#0f172a", color: "#fff", padding: "12px 18px", borderRadius: "10px", fontSize: "13px", fontWeight: "600", zIndex: 999, boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}>
+          Opgeslagen ✓
+        </div>
+      )}
+
       {/* Header row */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-        <span style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>
-          Wwft Dossier
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+        <span style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>Wwft Dossier</span>
+        <span style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "600", background: compliant ? "#dcfce7" : "#fff7ed", color: compliant ? "#16a34a" : "#c2410c" }}>
+          {compliant ? "✓ Compliant" : "In behandeling"}
         </span>
-        {compliant ? (
-          <span style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "600", background: "#dcfce7", color: "#16a34a" }}>
-            ✓ Wwft compliant
-          </span>
-        ) : (
-          <span style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "600", background: "#fff7ed", color: "#c2410c" }}>
-            Onvolledig
-          </span>
-        )}
       </div>
 
-      {/* Retention banner */}
-      <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "10px", padding: "12px 16px", marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div style={{ fontSize: "10px", fontWeight: "600", color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "3px" }}>Bewaartermijn</div>
-          <div style={{ fontSize: "13px", color: "#0f172a" }}>5 jaar na overdracht — automatisch geborgd</div>
-        </div>
-        <span style={{ fontSize: "11px", fontWeight: "600", color: "#16a34a", whiteSpace: "nowrap" }}>✓ AVG compliant</span>
+      {/* Info banner */}
+      <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "10px", padding: "12px 16px", marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px" }}>
+        <span style={{ fontSize: "12px", color: "#0369a1", lineHeight: "1.5" }}>
+          ✓ Identiteitsverificatie verloopt via Move.nl — koper en verkoper ontvangen een verificatieverzoek via DigiD. Dealflow bewaakt de status en bewaartermijn.
+        </span>
+        <span style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap" }}>Bewaartermijn: 5 jaar na overdracht</span>
       </div>
 
       {/* Party tabs */}
@@ -256,202 +245,201 @@ function WwftSection({ deal, dealId }: { deal: DealWithContacts; dealId: string 
         {(["buyer", "seller"] as const).map((p) => {
           const active = activeParty === p;
           return (
-            <button
-              key={p}
-              onClick={() => setActiveParty(p)}
-              style={{
-                flex: 1, padding: "10px", textAlign: "center", fontSize: "13px",
-                fontWeight: active ? "600" : "400", cursor: "pointer", border: "none",
-                background: active ? "#0284c7" : "#fff", color: active ? "#fff" : "#64748b",
-                transition: "all 0.1s",
-              }}
-            >
+            <button key={p} onClick={() => setActiveParty(p)} style={{ flex: 1, padding: "10px", textAlign: "center", fontSize: "13px", fontWeight: active ? "600" : "400", cursor: "pointer", border: "none", background: active ? "#0284c7" : "#fff", color: active ? "#fff" : "#64748b", transition: "all 0.1s" }}>
               {p === "buyer" ? "Koper" : "Verkoper"}
             </button>
           );
         })}
       </div>
 
-      {/* Status card */}
+      {/* Move.nl verification status card */}
       <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px", marginBottom: "14px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <div style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "14px" }}>Move.nl Verificatiestatus</div>
+
+        {/* Contact name row */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
           <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: avatarGradient, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "16px", fontWeight: "700", flexShrink: 0 }}>
             {initial}
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: "15px", fontWeight: "600", color: "#0f172a", marginBottom: "3px" }}>
-              {currentContact?.name ?? "Onbekend"}
-            </div>
-            <span style={{ fontSize: "11px", padding: "2px 7px", borderRadius: "20px", background: "#f1f5f9", color: "#64748b", fontWeight: "500" }}>
-              {activeParty === "buyer" ? "Koper" : "Verkoper"}
-            </span>
-          </div>
-          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-            <span style={{ fontSize: "11px", fontWeight: "600", padding: "3px 8px", borderRadius: "20px", background: riskColors[currentForm.risk_score]?.bg, color: riskColors[currentForm.risk_score]?.text }}>
-              {currentForm.risk_score.charAt(0).toUpperCase() + currentForm.risk_score.slice(1)} risico
-            </span>
-            {currentForm.pep && (
-              <span style={{ fontSize: "11px", fontWeight: "600", padding: "3px 8px", borderRadius: "20px", background: "#fee2e2", color: "#991b1b" }}>PEP ⚠️</span>
-            )}
-            {currentForm.sanctions_checked && (
-              <span style={{ fontSize: "11px", fontWeight: "600", padding: "3px 8px", borderRadius: "20px", background: "#f0fdf4", color: "#16a34a" }}>Sancties ✓</span>
-            )}
-          </div>
-        </div>
-        <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #f1f5f9" }}>
-          {currentEntry?.verified_at ? (
-            <span style={{ fontSize: "11px", color: "#16a34a" }}>✓ Geverifieerd op {fmtDate(currentEntry.verified_at)}</span>
-          ) : (
-            <span style={{ fontSize: "11px", color: "#f97316" }}>⚠️ Nog niet geverifieerd</span>
-          )}
-        </div>
-      </div>
-
-      {/* Wwft form */}
-      <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px", marginBottom: "14px" }}>
-
-        {/* IDENTITEITSVERIFICATIE */}
-        <div style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "12px" }}>
-          Identiteitsverificatie
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
           <div>
-            <label style={lbl}>Document type</label>
-            <select value={currentForm.document_type} onChange={(e) => setCurrentForm((f) => ({ ...f, document_type: e.target.value }))} style={inp}>
-              <option>Paspoort</option>
-              <option>Identiteitskaart</option>
-              <option>Verblijfsvergunning</option>
-            </select>
+            <div style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a" }}>{currentContact?.name ?? "Onbekend"}</div>
+            <div style={{ fontSize: "11px", color: "#94a3b8" }}>{activeParty === "buyer" ? "Koper" : "Verkoper"}</div>
           </div>
-          <div>
-            <label style={lbl}>Documentnummer</label>
-            <input value={currentForm.document_number} onChange={(e) => setCurrentForm((f) => ({ ...f, document_number: e.target.value }))} placeholder="NL9874XQ2" style={inp} />
-          </div>
-          <div>
-            <label style={lbl}>Uitgiftedatum</label>
-            <input type="date" value={currentForm.issue_date} onChange={(e) => setCurrentForm((f) => ({ ...f, issue_date: e.target.value }))} style={inp} />
-          </div>
-          <div>
-            <label style={lbl}>Vervaldatum</label>
-            <input type="date" value={currentForm.expiry_date} onChange={(e) => setCurrentForm((f) => ({ ...f, expiry_date: e.target.value }))} style={inp} />
-          </div>
-          <div>
-            <label style={lbl}>Geboortedatum</label>
-            <input type="date" value={currentForm.birth_date} onChange={(e) => setCurrentForm((f) => ({ ...f, birth_date: e.target.value }))} style={inp} />
-          </div>
-          <div>
-            <label style={lbl}>BSN nummer</label>
-            <input value={currentForm.bsn} onChange={(e) => setCurrentForm((f) => ({ ...f, bsn: e.target.value }))} placeholder="123.456.789" style={inp} />
-          </div>
-        </div>
-        <div>
-          <label style={lbl}>Adres</label>
-          <input value={currentForm.address} onChange={(e) => setCurrentForm((f) => ({ ...f, address: e.target.value }))} placeholder="Straatnaam 12, 1234 AB Amsterdam" style={{ ...inp, width: "100%" }} />
         </div>
 
-        {/* RISICOPROFIEL */}
-        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "16px", marginTop: "16px" }}>
-          <div style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "12px" }}>
-            Risicoprofiel
+        {/* Verification status */}
+        {!mockVerified ? (
+          <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: "8px", padding: "12px 14px", marginBottom: "10px" }}>
+            <div style={{ fontSize: "12px", color: "#c2410c", marginBottom: "8px" }}>
+              ⏳ Verificatieverzoek verstuurd via Move.nl — wacht op DigiD verificatie van {currentContact?.name ?? "de partij"}
+            </div>
+            <button
+              onClick={() => console.log("Resend Move.nl verification for", currentContactId)}
+              style={{ padding: "6px 12px", background: "#fff", border: "1px solid #e8ecf0", borderRadius: "6px", fontSize: "11px", color: "#64748b", cursor: "pointer" }}
+            >
+              Opnieuw versturen
+            </button>
           </div>
-          <div style={{ marginBottom: "12px" }}>
-            <label style={lbl}>Risicoscore</label>
-            <select value={currentForm.risk_score} onChange={(e) => setCurrentForm((f) => ({ ...f, risk_score: e.target.value as "laag" | "middel" | "hoog" }))} style={{ ...inp, width: "100%" }}>
-              <option value="laag">Laag</option>
-              <option value="middel">Middel</option>
-              <option value="hoog">Hoog</option>
-            </select>
-          </div>
-          <label
-            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: "8px", cursor: "pointer", marginBottom: "8px" }}
-            onClick={() => setCurrentForm((f) => ({ ...f, pep: !f.pep }))}
-          >
-            <input type="checkbox" checked={currentForm.pep} onChange={() => {}} style={{ width: "16px", height: "16px", accentColor: "#0284c7", cursor: "pointer" }} />
-            <div>
-              <div style={{ fontSize: "13px", fontWeight: "500", color: "#0f172a" }}>PEP — Politiek Prominent Persoon</div>
-              <div style={{ fontSize: "11px", color: "#94a3b8" }}>Vink aan indien van toepassing</div>
+        ) : (
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "12px 14px", marginBottom: "10px" }}>
+            <div style={{ fontSize: "12px", color: "#16a34a", marginBottom: "10px" }}>✓ Geverifieerd via DigiD op {fmtDate(new Date().toISOString())}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "8px" }}>
+              {[
+                { label: "Naam",         value: currentContact?.name ?? "—" },
+                { label: "Geboortedatum",value: "— (via Move.nl)" },
+                { label: "ID type",      value: "Paspoort (via Move.nl)" },
+                { label: "ID nummer",    value: "•••••• (via Move.nl)" },
+              ].map((f) => (
+                <div key={f.label}>
+                  <div style={{ fontSize: "9px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "2px" }}>{f.label}</div>
+                  <div style={{ fontSize: "13px", color: "#0f172a" }}>{f.value}</div>
+                </div>
+              ))}
             </div>
-          </label>
-          <label
-            style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: "8px", cursor: "pointer" }}
-            onClick={() => setCurrentForm((f) => ({ ...f, sanctions_checked: !f.sanctions_checked }))}
-          >
-            <input type="checkbox" checked={currentForm.sanctions_checked} onChange={() => {}} style={{ width: "16px", height: "16px", accentColor: "#0284c7", cursor: "pointer" }} />
-            <div>
-              <div style={{ fontSize: "13px", fontWeight: "500", color: "#0f172a" }}>Sanctielijst gecontroleerd</div>
-              <div style={{ fontSize: "11px", color: "#94a3b8" }}>Bevestig dat u de sanctielijst heeft geraadpleegd</div>
-            </div>
-          </label>
-        </div>
-
-        {/* HERKOMST VERMOGEN — only for buyer */}
-        {activeParty === "buyer" && (
-          <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "16px", marginTop: "16px" }}>
-            <div style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "12px" }}>
-              Herkomst vermogen
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
-              <div>
-                <label style={lbl}>Financieringsvorm</label>
-                <select value={currentForm.financing_type} onChange={(e) => setCurrentForm((f) => ({ ...f, financing_type: e.target.value }))} style={inp}>
-                  <option>Hypotheek</option>
-                  <option>Eigen middelen</option>
-                  <option>Combinatie</option>
-                  <option>Anders</option>
-                </select>
-              </div>
-              <div>
-                <label style={lbl}>Hypotheekverstrekker</label>
-                <input value={currentForm.mortgage_lender} onChange={(e) => setCurrentForm((f) => ({ ...f, mortgage_lender: e.target.value }))} placeholder="Bijv. ING, Rabobank…" style={inp} disabled={currentForm.financing_type === "Eigen middelen"} />
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={lbl}>Herkomst eigen middelen</label>
-                <select value={currentForm.own_funds_source} onChange={(e) => setCurrentForm((f) => ({ ...f, own_funds_source: e.target.value }))} style={{ ...inp, width: "100%" }} disabled={currentForm.financing_type === "Hypotheek"}>
-                  <option>Spaargeld</option>
-                  <option>Schenking</option>
-                  <option>Erfenis</option>
-                  <option>Verkoop onroerend goed</option>
-                  <option>Anders</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label style={lbl}>Toelichting</label>
-              <textarea
-                value={currentForm.notes}
-                onChange={(e) => setCurrentForm((f) => ({ ...f, notes: e.target.value }))}
-                placeholder="Aanvullende toelichting over herkomst vermogen…"
-                rows={3}
-                style={{ ...inp, resize: "vertical", lineHeight: "1.5" }}
-              />
-            </div>
+            <div style={{ fontSize: "10px", color: "#94a3b8", fontStyle: "italic" }}>(ontvangen via Move.nl)</div>
           </div>
         )}
-      </div>
 
-      {/* Action buttons */}
-      <div style={{ display: "flex", gap: "8px" }}>
+        {/* Demo toggle */}
         <button
-          onClick={handleSave}
-          disabled={saving}
-          style={{ padding: "9px 18px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "13px", fontWeight: "600", cursor: "pointer", opacity: saving ? 0.6 : 1 }}
+          onClick={() => setMockVerified(!mockVerified)}
+          style={{ fontSize: "10px", color: "#cbd5e1", background: "none", border: "none", cursor: "pointer", padding: 0 }}
         >
-          {saving ? "Opslaan…" : saved ? "✓ Opgeslagen" : "Opslaan"}
+          [Demo] Toggle verificatiestatus
         </button>
-        {!currentEntry?.verified_at && (
-          <button
-            onClick={handleVerify}
-            style={{ padding: "9px 18px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", color: "#16a34a", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}
-          >
-            ✓ Markeer als geverifieerd
-          </button>
-        )}
-        {currentEntry?.verified_at && (
-          <span style={{ display: "flex", alignItems: "center", fontSize: "12px", color: "#16a34a", gap: "4px" }}>
-            ✓ Geverifieerd op {fmtDate(currentEntry.verified_at)}
-          </span>
+      </div>
+
+      {/* Risk assessment card */}
+      <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px", marginBottom: "14px" }}>
+        <div style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "4px" }}>Risicobeoordeling Makelaar</div>
+        <div style={{ fontSize: "11px", color: "#94a3b8", marginBottom: "14px" }}>In te vullen door de makelaar — eigen professionele beoordeling</div>
+
+        <div style={{ marginBottom: "12px" }}>
+          <label style={lbl}>Risicoscore</label>
+          <select value={currentForm.risk_score} onChange={(e) => setCurrentForm((f) => ({ ...f, risk_score: e.target.value as WwftForm["risk_score"] }))} style={{ ...inp, width: "100%" }}>
+            <option value="laag">Laag</option>
+            <option value="middel">Middel</option>
+            <option value="hoog">Hoog</option>
+          </select>
+          <div style={{ background: risk.bg, border: `1px solid ${risk.border}`, borderRadius: "8px", padding: "10px 12px", fontSize: "11px", color: risk.color, marginTop: "8px" }}>
+            {risk.text}
+          </div>
+        </div>
+
+        <div
+          onClick={() => setCurrentForm((f) => ({ ...f, pep_check: !f.pep_check }))}
+          style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "10px 14px", background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: "8px", marginBottom: "8px", cursor: "pointer" }}
+        >
+          <input type="checkbox" checked={currentForm.pep_check} onChange={() => {}} style={{ width: "16px", height: "16px", accentColor: "#0284c7", cursor: "pointer", marginTop: "2px", flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: "500", color: "#0f172a" }}>PEP — Politiek Prominent Persoon</div>
+            <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>Vink aan indien {currentContact?.name ?? "deze partij"} een politiek prominente functie bekleedt of heeft bekleed</div>
+          </div>
+        </div>
+
+        <div
+          onClick={() => setCurrentForm((f) => ({ ...f, sanctions_check: !f.sanctions_check }))}
+          style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "10px 14px", background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: "8px", cursor: "pointer" }}
+        >
+          <input type="checkbox" checked={currentForm.sanctions_check} onChange={() => {}} style={{ width: "16px", height: "16px", accentColor: "#0284c7", cursor: "pointer", marginTop: "2px", flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: "500", color: "#0f172a" }}>Sanctielijst gecontroleerd en vrij</div>
+            <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>Bevestig dat u de EU sanctielijst heeft geraadpleegd en geen treffer gevonden</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Herkomst vermogen — buyer only */}
+      {activeParty === "buyer" && (
+        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px", marginBottom: "14px" }}>
+          <div style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "4px" }}>Herkomst Vermogen</div>
+          <div style={{ fontSize: "11px", color: "#94a3b8", marginBottom: "14px" }}>Wettelijk verplicht vast te leggen o.g.v. Wwft artikel 3</div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={lbl}>Financieringsvorm</label>
+              <select value={currentForm.financing_type} onChange={(e) => setCurrentForm((f) => ({ ...f, financing_type: e.target.value }))} style={{ ...inp, width: "100%" }}>
+                <option>Hypotheek</option>
+                <option>Eigen middelen</option>
+                <option>Combinatie</option>
+                <option>Anders</option>
+              </select>
+            </div>
+
+            {showsHypotheek && (
+              <div>
+                <label style={lbl}>Geldverstrekker</label>
+                <input value={currentForm.bank} onChange={(e) => setCurrentForm((f) => ({ ...f, bank: e.target.value }))} placeholder="ING Bank" style={inp} />
+              </div>
+            )}
+
+            {showsHypotheek && (
+              <div>
+                <label style={lbl}>Hypotheekbedrag</label>
+                <div style={{ position: "relative" }}>
+                  <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "13px", color: "#94a3b8" }}>€</span>
+                  <input type="number" value={currentForm.mortgage_amount} onChange={(e) => setCurrentForm((f) => ({ ...f, mortgage_amount: e.target.value }))} placeholder="350000" style={{ ...inp, paddingLeft: "26px" }} />
+                </div>
+              </div>
+            )}
+
+            {showsEigenMiddelen && (
+              <div style={{ gridColumn: showsHypotheek ? "1 / -1" : "auto" }}>
+                <label style={lbl}>Eigen middelen</label>
+                <div style={{ position: "relative" }}>
+                  <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "13px", color: "#94a3b8" }}>€</span>
+                  <input type="number" value={currentForm.own_funds} onChange={(e) => setCurrentForm((f) => ({ ...f, own_funds: e.target.value }))} placeholder="50000" style={{ ...inp, paddingLeft: "26px" }} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label style={lbl}>Herkomst eigen middelen</label>
+            <textarea
+              value={currentForm.own_funds_source}
+              onChange={(e) => setCurrentForm((f) => ({ ...f, own_funds_source: e.target.value }))}
+              placeholder="Bijv. spaartegoed, erfenis, verkoop vorig appartement..."
+              rows={3}
+              style={{ ...inp, resize: "vertical", lineHeight: "1.5", width: "100%" }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* FIU card */}
+      <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px 16px", marginBottom: "14px" }}>
+        <div style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "10px" }}>FIU — Ongebruikelijke Transacties</div>
+        {currentForm.risk_score === "laag" ? (
+          <div style={{ fontSize: "12px", color: "#16a34a" }}>✓ Geen aanleiding voor FIU melding</div>
+        ) : (
+          <div>
+            <div style={{ background: "#fef9c3", border: "1px solid #fde047", borderRadius: "8px", padding: "10px 12px", fontSize: "12px", color: "#854d0e", marginBottom: "6px" }}>
+              ⚠️ Verhoogd risico — overweeg melding bij FIU-Nederland via fiu.nl
+            </div>
+            <a href="https://www.fiu.nl" target="_blank" rel="noopener noreferrer" style={{ fontSize: "11px", color: "#0284c7", textDecoration: "none", display: "inline-block" }}>
+              FIU-Nederland →
+            </a>
+          </div>
         )}
       </div>
+
+      {/* Save button */}
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        style={{ width: "100%", background: "#0284c7", border: "none", borderRadius: "10px", padding: "12px", fontSize: "14px", fontWeight: "700", color: "#fff", cursor: "pointer", opacity: saving ? 0.6 : 1, marginBottom: "8px", fontFamily: "DM Sans, Helvetica Neue, sans-serif" }}
+      >
+        {saving ? "Opslaan…" : "Risicobeoordeling opslaan"}
+      </button>
+
+      {/* Export button */}
+      <button
+        onClick={() => console.log("wwft export", { buyerEntry, sellerEntry, buyerForm, sellerForm })}
+        style={{ width: "100%", background: "#fff", border: "1px solid #e8ecf0", borderRadius: "8px", padding: "10px", fontSize: "13px", color: "#64748b", cursor: "pointer", fontFamily: "DM Sans, Helvetica Neue, sans-serif" }}
+      >
+        Dossier exporteren
+      </button>
     </div>
   );
 }
