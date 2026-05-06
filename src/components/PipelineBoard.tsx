@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   DndContext,
   DragEndEvent,
-  DragOverEvent,
   DragOverlay,
   PointerSensor,
   useSensor,
