@@ -34,8 +34,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-950 px-4">
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-white">Sign in</h1>
-          <p className="mt-2 text-gray-400">Welcome back to Dealflow</p>
+          <h1 className="text-3xl font-bold text-white">Inloggen</h1>
+          <p className="mt-2 text-gray-400">Welkom terug bij Dealflow</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -76,14 +76,14 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full rounded-lg bg-indigo-600 py-2.5 font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
           >
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? "Inloggen…" : "Inloggen"}
           </button>
         </form>
 
         <p className="text-center text-sm text-gray-400">
-          No account?{" "}
+          Nog geen account?{" "}
           <Link href="/signup" className="text-indigo-400 hover:text-indigo-300">
-            Sign up
+            Registreren
           </Link>
         </p>
       </div>

@@ -32,10 +32,10 @@ export default function SignupPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-950 px-4">
         <div className="text-center space-y-4">
-          <h2 className="text-2xl font-bold text-white">Check your email</h2>
-          <p className="text-gray-400">We sent a confirmation link to <strong>{email}</strong>.</p>
+          <h2 className="text-2xl font-bold text-white">Controleer je e-mail</h2>
+          <p className="text-gray-400">We hebben een bevestigingslink gestuurd naar <strong>{email}</strong>.</p>
           <Link href="/login" className="text-indigo-400 hover:text-indigo-300 text-sm">
-            Back to sign in
+            Terug naar inloggen
           </Link>
         </div>
       </div>
@@ -46,8 +46,8 @@ export default function SignupPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-950 px-4">
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-white">Create account</h1>
-          <p className="mt-2 text-gray-400">Start managing your pipeline</p>
+          <h1 className="text-3xl font-bold text-white">Account aanmaken</h1>
+          <p className="mt-2 text-gray-400">Begin met het beheren van je pipeline</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -89,14 +89,14 @@ export default function SignupPage() {
             disabled={loading}
             className="w-full rounded-lg bg-indigo-600 py-2.5 font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
           >
-            {loading ? "Creating account…" : "Create account"}
+            {loading ? "Aanmaken…" : "Account aanmaken"}
           </button>
         </form>
 
         <p className="text-center text-sm text-gray-400">
-          Already have an account?{" "}
+          Al een account?{" "}
           <Link href="/login" className="text-indigo-400 hover:text-indigo-300">
-            Sign in
+            Inloggen
           </Link>
         </p>
       </div>

@@ -32,7 +32,7 @@ export default function DealCard({ deal, onClick }: Props) {
       <p className="text-xs text-gray-400 mt-0.5 truncate">{deal.company}</p>
       {deal.value != null && (
         <p className="text-xs text-indigo-400 mt-2 font-medium">
-          ${deal.value.toLocaleString()}
+          €{deal.value.toLocaleString("nl-NL")}
         </p>
       )}
       {deal.contact_name && (

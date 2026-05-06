@@ -21,11 +21,11 @@ import DealSlideOver from "./DealSlideOver";
 
 const STAGES: { id: DealStage; label: string; color: string }[] = [
   { id: "lead", label: "Lead", color: "border-gray-600" },
-  { id: "qualified", label: "Qualified", color: "border-blue-600" },
-  { id: "proposal", label: "Proposal", color: "border-yellow-600" },
-  { id: "negotiation", label: "Negotiation", color: "border-orange-600" },
-  { id: "closed_won", label: "Closed Won", color: "border-green-600" },
-  { id: "closed_lost", label: "Closed Lost", color: "border-red-600" },
+  { id: "qualified", label: "Gekwalificeerd", color: "border-blue-600" },
+  { id: "proposal", label: "Offerte", color: "border-yellow-600" },
+  { id: "negotiation", label: "Onderhandeling", color: "border-orange-600" },
+  { id: "closed_won", label: "Gewonnen", color: "border-green-600" },
+  { id: "closed_lost", label: "Verloren", color: "border-red-600" },
 ];
 
 function StageColumn({
@@ -50,7 +50,7 @@ function StageColumn({
           <span className="text-xs bg-gray-800 text-gray-400 rounded-full px-2 py-0.5">{deals.length}</span>
         </div>
         {total > 0 && (
-          <p className="text-xs text-gray-500 mt-0.5">${total.toLocaleString()}</p>
+          <p className="text-xs text-gray-500 mt-0.5">€{total.toLocaleString("nl-NL")}</p>
         )}
       </div>
 
@@ -69,7 +69,7 @@ function StageColumn({
         onClick={() => onAddClick(stage.id)}
         className="m-2 rounded-lg border border-dashed border-gray-700 py-2 text-xs text-gray-500 hover:border-indigo-500 hover:text-indigo-400 transition-colors"
       >
-        + Add deal
+        + Deal toevoegen
       </button>
     </div>
   );
@@ -148,7 +148,7 @@ export default function PipelineBoard({ initialDeals, userEmail }: Props) {
             <h1 className="text-xl font-bold">Dealflow</h1>
             <div className="hidden sm:flex items-center gap-1 text-sm text-gray-400">
               <span>Pipeline:</span>
-              <span className="text-indigo-400 font-medium">${totalPipelineValue.toLocaleString()}</span>
+              <span className="text-indigo-400 font-medium">€{totalPipelineValue.toLocaleString("nl-NL")}</span>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -157,13 +157,13 @@ export default function PipelineBoard({ initialDeals, userEmail }: Props) {
               onClick={() => setAddStage("lead")}
               className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500 transition-colors"
             >
-              + New deal
+              + Nieuwe deal
             </button>
             <button
               onClick={handleSignOut}
               className="text-sm text-gray-400 hover:text-white transition-colors"
             >
-              Sign out
+              Uitloggen
             </button>
           </div>
         </header>
