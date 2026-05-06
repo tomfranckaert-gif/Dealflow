@@ -14,6 +14,7 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { useDroppable } from "@dnd-kit/core";
 import { createClient } from "@/lib/supabase/client";
 import type { Deal, DealStage } from "@/types/database";
+import Link from "next/link";
 import DealCard from "./DealCard";
 import AddDealModal from "./AddDealModal";
 import DealSlideOver from "./DealSlideOver";
@@ -152,11 +153,17 @@ export default function PipelineBoard({ initialDeals, userEmail }: Props) {
           </div>
           <div className="flex items-center gap-4">
             <span className="hidden sm:block text-sm text-gray-400">{userEmail}</span>
-            <button
-              onClick={() => setAddStage("lead")}
+            <Link
+              href="/dashboard/new-deal"
               className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500 transition-colors"
             >
-              + Nieuwe deal
+              + Nieuwe transactie
+            </Link>
+            <button
+              onClick={() => setAddStage("lead")}
+              className="rounded-lg border border-gray-700 px-4 py-2 text-sm font-medium hover:border-gray-500 transition-colors"
+            >
+              + Snelle deal
             </button>
             <button
               onClick={handleSignOut}
