@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { searchRealworks, type RealworksProperty } from "@/lib/realworks";
+import { searchProperties, type RealworksProperty } from "@/lib/realworks";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -50,7 +50,6 @@ export default function NewDealPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<RealworksProperty[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -80,11 +79,9 @@ export default function NewDealPage() {
 
   const doSearch = useCallback(async (q: string) => {
     if (q.length < 2) { setResults([]); setShowDropdown(false); return; }
-    setLoading(true);
-    const data = await searchRealworks(q);
+    const data = searchProperties(q);
     setResults(data);
     setShowDropdown(true);
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -210,9 +207,6 @@ export default function NewDealPage() {
                 placeholder="bv. Keizersgracht of Amsterdam..."
                 style={inputStyle}
               />
-              {loading && (
-                <div style={{ position: "absolute", right: "14px", top: "38px", color: "#c9a84c", fontSize: "12px" }}>Zoeken…</div>
-              )}
               {showDropdown && results.length > 0 && (
                 <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#0f1628", border: "1px solid #c9a84c", borderRadius: "8px", zIndex: 50, marginTop: "4px", overflow: "hidden" }}>
                   {results.map((p) => (
