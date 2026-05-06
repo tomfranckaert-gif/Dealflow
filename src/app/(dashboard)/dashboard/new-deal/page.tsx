@@ -226,7 +226,7 @@ export default function NewDealPage() {
                   ))}
                 </div>
               )}
-              {showDropdown && results.length === 0 && !loading && (
+              {showDropdown && results.length === 0 && (
                 <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#0f1628", border: "1px solid #1e2d4a", borderRadius: "8px", padding: "12px 16px", color: "#8a7a6a", fontFamily: "Georgia, serif", fontSize: "14px", marginTop: "4px" }}>
                   Geen woningen gevonden
                 </div>

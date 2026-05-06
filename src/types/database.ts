@@ -6,38 +6,52 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export interface Database {
-  public: {
-    Tables: {
-      deals: {
-        Row: {
-          id: string;
-          created_at: string;
-          title: string;
-          company: string;
-          value: number | null;
-          stage: DealStage;
-          owner_id: string;
-          notes: string | null;
-          contact_name: string | null;
-          contact_email: string | null;
-        };
-        Insert: Omit<Database["public"]["Tables"]["deals"]["Row"], "id" | "created_at">;
-        Update: Partial<Database["public"]["Tables"]["deals"]["Insert"]>;
-      };
-    };
-    Enums: {
-      deal_stage: DealStage;
-    };
-  };
-}
-
 export type DealStage =
   | "lead"
-  | "qualified"
-  | "proposal"
-  | "negotiation"
-  | "closed_won"
-  | "closed_lost";
+  | "bezichtiging"
+  | "bod"
+  | "koopakte"
+  | "voorwaarden"
+  | "financiering"
+  | "overdracht"
+  | "gesloten";
 
-export type Deal = Database["public"]["Tables"]["deals"]["Row"];
+export interface Deal {
+  id: string;
+  created_at: string;
+  title: string;
+  company: string;
+  value: number | null;
+  stage: DealStage;
+  owner_id: string;
+  notes: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  address: string | null;
+  postcode: string | null;
+  city: string | null;
+  property_type: string | null;
+  surface: number | null;
+  rooms: number | null;
+  asking_price: number | null;
+  agreed_price: number | null;
+  transfer_date: string | null;
+  notary_name: string | null;
+  seller_id: string | null;
+  buyer_id: string | null;
+}
+
+export interface Contact {
+  id: string;
+  created_at: string;
+  owner_id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  type: "buyer" | "seller";
+}
+
+export interface DealWithContacts extends Deal {
+  buyer: Pick<Contact, "name" | "email" | "phone"> | null;
+  seller: Pick<Contact, "name" | "email" | "phone"> | null;
+}

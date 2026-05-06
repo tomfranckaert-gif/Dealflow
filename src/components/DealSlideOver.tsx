@@ -6,11 +6,13 @@ import type { Deal, DealStage } from "@/types/database";
 
 const STAGES: { value: DealStage; label: string }[] = [
   { value: "lead", label: "Lead" },
-  { value: "qualified", label: "Gekwalificeerd" },
-  { value: "proposal", label: "Offerte" },
-  { value: "negotiation", label: "Onderhandeling" },
-  { value: "closed_won", label: "Gewonnen" },
-  { value: "closed_lost", label: "Verloren" },
+  { value: "bezichtiging", label: "Bezichtiging" },
+  { value: "bod", label: "Bod" },
+  { value: "koopakte", label: "Koopakte" },
+  { value: "voorwaarden", label: "Voorwaarden" },
+  { value: "financiering", label: "Financiering" },
+  { value: "overdracht", label: "Overdracht" },
+  { value: "gesloten", label: "Gesloten" },
 ];
 
 interface Props {

@@ -20,12 +20,14 @@ import AddDealModal from "./AddDealModal";
 import DealSlideOver from "./DealSlideOver";
 
 const STAGES: { id: DealStage; label: string; color: string }[] = [
-  { id: "lead", label: "Lead", color: "border-gray-600" },
-  { id: "qualified", label: "Gekwalificeerd", color: "border-blue-600" },
-  { id: "proposal", label: "Offerte", color: "border-yellow-600" },
-  { id: "negotiation", label: "Onderhandeling", color: "border-orange-600" },
-  { id: "closed_won", label: "Gewonnen", color: "border-green-600" },
-  { id: "closed_lost", label: "Verloren", color: "border-red-600" },
+  { id: "lead",         label: "Lead",         color: "border-gray-600" },
+  { id: "bezichtiging", label: "Bezichtiging", color: "border-blue-600" },
+  { id: "bod",          label: "Bod",           color: "border-purple-600" },
+  { id: "koopakte",     label: "Koopakte",      color: "border-yellow-600" },
+  { id: "voorwaarden",  label: "Voorwaarden",   color: "border-orange-600" },
+  { id: "financiering", label: "Financiering",  color: "border-amber-600" },
+  { id: "overdracht",   label: "Overdracht",    color: "border-green-600" },
+  { id: "gesloten",     label: "Gesloten",      color: "border-emerald-600" },
 ];
 
 function StageColumn({
@@ -137,7 +139,7 @@ export default function PipelineBoard({ initialDeals, userEmail }: Props) {
   }
 
   const totalPipelineValue = deals
-    .filter((d) => d.stage !== "closed_lost")
+    .filter((d) => d.stage !== "gesloten")
     .reduce((sum, d) => sum + (d.value ?? 0), 0);
 
   return (
