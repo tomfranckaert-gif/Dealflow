@@ -113,8 +113,20 @@ interface Props {
 export default function PipelinePage({ deals }: Props) {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<DealStage | "alle">("alle");
+  const [search, setSearch] = useState("");
 
-  const filtered = activeFilter === "alle" ? deals : deals.filter((d) => d.stage === activeFilter);
+  const filtered = deals.filter((deal) => {
+    const stageMatch = activeFilter === "alle" || deal.stage === activeFilter;
+    if (!stageMatch) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      deal.address?.toLowerCase().includes(q) ||
+      deal.city?.toLowerCase().includes(q) ||
+      deal.buyer?.name?.toLowerCase().includes(q) ||
+      deal.stage?.toLowerCase().includes(q)
+    );
+  });
   const totalValue = deals.filter((d) => d.stage !== "gesloten").reduce((s, d) => s + (d.agreed_price ?? d.value ?? 0), 0);
   const activeCount = deals.filter((d) => d.stage !== "gesloten").length;
   const wonCount = deals.filter((d) => d.stage === "gesloten").length;
@@ -131,7 +143,12 @@ export default function PipelinePage({ deals }: Props) {
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <div style={{ background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: "8px", padding: "6px 12px", display: "flex", alignItems: "center", gap: "6px" }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-            <input placeholder="Zoeken..." style={{ border: "none", background: "transparent", fontSize: "13px", color: "#0f172a", outline: "none", width: "140px" }} />
+            <input
+              placeholder="Zoeken..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ border: "none", background: "transparent", fontSize: "13px", color: "#0f172a", outline: "none", width: "140px" }}
+            />
           </div>
           <Link href="/dashboard/new-deal" style={{ background: "#0284c7", color: "#fff", borderRadius: "8px", padding: "8px 14px", fontSize: "13px", fontWeight: "600", textDecoration: "none", whiteSpace: "nowrap" }}>
             + Nieuwe deal
@@ -179,10 +196,26 @@ export default function PipelinePage({ deals }: Props) {
           <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
             {filtered.length === 0 ? (
               <div style={{ textAlign: "center", padding: "60px 24px" }}>
-                <p style={{ fontSize: "14px", color: "#94a3b8", marginBottom: "16px" }}>Nog geen deals — maak je eerste deal aan</p>
-                <Link href="/dashboard/new-deal" style={{ background: "#0284c7", color: "#fff", borderRadius: "8px", padding: "8px 14px", fontSize: "13px", fontWeight: "600", textDecoration: "none" }}>
-                  + Nieuwe deal aanmaken
-                </Link>
+                {search ? (
+                  <>
+                    <p style={{ fontSize: "14px", color: "#94a3b8", marginBottom: "16px" }}>
+                      Geen deals gevonden voor &lsquo;{search}&rsquo;
+                    </p>
+                    <button
+                      onClick={() => setSearch("")}
+                      style={{ background: "#f8fafc", border: "1px solid #e8ecf0", color: "#64748b", borderRadius: "8px", padding: "8px 14px", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}
+                    >
+                      ✕ Zoekopdracht wissen
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontSize: "14px", color: "#94a3b8", marginBottom: "16px" }}>Nog geen deals — maak je eerste deal aan</p>
+                    <Link href="/dashboard/new-deal" style={{ background: "#0284c7", color: "#fff", borderRadius: "8px", padding: "8px 14px", fontSize: "13px", fontWeight: "600", textDecoration: "none" }}>
+                      + Nieuwe deal aanmaken
+                    </Link>
+                  </>
+                )}
               </div>
             ) : (
               filtered.map((deal) => (
