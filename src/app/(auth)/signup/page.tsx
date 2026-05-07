@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { welcomeEmail } from "@/lib/email-templates";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -18,6 +19,12 @@ export default function SignupPage() {
     const supabase = createClient();
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) { setError(error.message); setLoading(false); return; }
+    const agentName = email.split("@")[0];
+    fetch("/api/send-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: email, subject: "Welkom bij Transactly!", html: welcomeEmail(agentName) }),
+    }).catch(() => {});
     setDone(true);
   }
 

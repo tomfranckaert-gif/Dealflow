@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { searchProperties, type RealworksProperty } from "@/lib/realworks";
+import { newDealEmail } from "@/lib/email-templates";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -454,6 +455,13 @@ export default function NewDealPage() {
       contact_email: seller.email || null,
     });
     if (e3) { setError(e3.message); setSubmitting(false); return; }
+    const agentName = user.email?.split("@")[0] ?? "Makelaar";
+    const address = `${property.address}, ${property.city}`;
+    fetch("/api/send-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: user.email, subject: `Nieuwe deal: ${address}`, html: newDealEmail(agentName, address) }),
+    }).catch(() => {});
     router.push("/dashboard");
   }
 

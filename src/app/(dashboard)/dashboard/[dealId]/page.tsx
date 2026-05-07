@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { DealWithContacts, DealStage } from "@/types/database";
+import { dealClosedEmail } from "@/lib/email-templates";
 
 const STAGES: { id: DealStage; label: string }[] = [
   { id: "lead",         label: "Lead" },
@@ -753,6 +754,16 @@ export default function DealDetailPage() {
         status: "concept",
       });
     }
+    if (user?.email) {
+      const agentName = user.email.split("@")[0];
+      const address = deal.address ?? deal.title;
+      const price = deal.agreed_price ?? deal.value ?? 0;
+      fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: user.email, subject: `🎉 Deal gesloten: ${address}`, html: dealClosedEmail(agentName, address, price) }),
+      }).catch(() => {});
+    }
     setClosingModal(false);
     setCurrentStage("gesloten");
     setStageToast("Deal gesloten 🎉");
@@ -765,6 +776,19 @@ export default function DealDetailPage() {
     setStageDropdownOpen(false);
     const supabase = createClient();
     await supabase.from("deals").update({ stage: newStage }).eq("id", dealId);
+    if (newStage === "gesloten" && deal) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) {
+        const agentName = user.email.split("@")[0];
+        const address = deal.address ?? deal.title;
+        const price = deal.agreed_price ?? deal.value ?? 0;
+        fetch("/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: user.email, subject: `🎉 Deal gesloten: ${address}`, html: dealClosedEmail(agentName, address, price) }),
+        }).catch(() => {});
+      }
+    }
     const label = STAGES.find((s) => s.id === newStage)?.label ?? newStage;
     setStageToast(`Fase bijgewerkt naar ${label}`);
     setTimeout(() => setStageToast(""), 2500);
