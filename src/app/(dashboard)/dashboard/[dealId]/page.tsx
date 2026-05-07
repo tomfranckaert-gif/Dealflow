@@ -27,12 +27,16 @@ const STAGE_BADGE: Record<DealStage, { bg: string; text: string; dot: string }> 
   gesloten:     { bg: "#f1f5f9", text: "#374151", dot: "#6b7280" },
 };
 
-type SubNav = "overzicht" | "verkoper" | "documenten" | "voorwaarden" | "wwft" | "whatsapp" | "gesprekken" | "overdracht";
+type SubNav = "overzicht" | "bezichtigingen" | "verkoper" | "documenten" | "voorwaarden" | "wwft" | "whatsapp" | "gesprekken" | "overdracht";
 
 const SUB_NAV: { id: SubNav; label: string; icon: React.ReactNode }[] = [
   {
     id: "overzicht", label: "Overzicht",
     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>,
+  },
+  {
+    id: "bezichtigingen", label: "Bezichtigingen",
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>,
   },
   {
     id: "verkoper", label: "Verkoper",
@@ -974,6 +978,273 @@ function GesprekkenSection({ deal, dealId }: { deal: DealWithContacts; dealId: s
   );
 }
 
+interface Viewing {
+  id: string;
+  deal_id: string;
+  contact_id: string | null;
+  scheduled_at: string;
+  status: "bevestigd" | "voltooid" | "niet verschenen";
+  feedback: string | null;
+  rating: number | null;
+  created_at: string;
+}
+
+interface BuyerContact {
+  id: string;
+  name: string;
+}
+
+const VIEWING_STATUS: Record<string, { bg: string; color: string; label: string }> = {
+  bevestigd:       { bg: "#eff6ff", color: "#1d4ed8", label: "Bevestigd" },
+  voltooid:        { bg: "#f0fdf4", color: "#15803d", label: "Voltooid" },
+  "niet verschenen": { bg: "#fee2e2", color: "#b91c1c", label: "Niet verschenen" },
+};
+
+function StarRating({ value, onChange }: { value: number | null; onChange?: (r: number) => void }) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const display = hovered ?? value ?? 0;
+  return (
+    <div style={{ display: "flex", gap: "2px" }}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <span
+          key={star}
+          onClick={() => onChange?.(star)}
+          onMouseEnter={() => onChange && setHovered(star)}
+          onMouseLeave={() => onChange && setHovered(null)}
+          style={{ fontSize: "16px", cursor: onChange ? "pointer" : "default", color: star <= display ? "#f59e0b" : "#e2e8f0", lineHeight: 1 }}
+        >
+          ★
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function BezichtigingenSection({ deal, dealId }: { deal: DealWithContacts; dealId: string }) {
+  const supabase = createClient();
+  const [viewings, setViewings] = useState<Viewing[]>([]);
+  const [buyers, setBuyers] = useState<BuyerContact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [formContactId, setFormContactId] = useState("");
+  const [formScheduledAt, setFormScheduledAt] = useState(nowLocalIso);
+
+  const [feedbackDraft, setFeedbackDraft] = useState<Record<string, string>>({});
+  const [savingFeedback, setSavingFeedback] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const [{ data: vData }, { data: cData }] = await Promise.all([
+      supabase.from("viewings").select("*").eq("deal_id", dealId).order("scheduled_at", { ascending: false }),
+      supabase.from("contacts").select("id, name").eq("type", "buyer"),
+    ]);
+    const vList = (vData ?? []) as Viewing[];
+    const cList = (cData ?? []) as BuyerContact[];
+    setViewings(vList);
+    setBuyers(cList);
+    const drafts: Record<string, string> = {};
+    vList.forEach((v) => { if (v.feedback) drafts[v.id] = v.feedback; });
+    setFeedbackDraft((prev) => ({ ...drafts, ...prev }));
+    setLoading(false);
+    if (!formContactId && cList.length > 0) setFormContactId(cList[0].id);
+  }, [dealId, supabase, formContactId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const total = viewings.length;
+  const bevestigd = viewings.filter((v) => v.status === "bevestigd").length;
+  const rated = viewings.filter((v) => v.rating !== null);
+  const avgRating = rated.length ? (rated.reduce((s, v) => s + (v.rating ?? 0), 0) / rated.length).toFixed(1) : null;
+
+  async function handleInplannen() {
+    if (!formContactId || !formScheduledAt) return;
+    setSaving(true);
+    const dt = new Date(formScheduledAt);
+    const dateStr = dt.toLocaleDateString("nl-NL", { day: "numeric", month: "long" });
+    const timeStr = dt.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+    const buyer = buyers.find((b) => b.id === formContactId);
+
+    await supabase.from("viewings").insert({
+      deal_id: dealId,
+      contact_id: formContactId,
+      scheduled_at: dt.toISOString(),
+      status: "bevestigd",
+    });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from("messages").insert({
+        owner_id: user.id,
+        deal_id: dealId,
+        contact_id: formContactId,
+        channel: "whatsapp",
+        content: `Bevestiging bezichtiging ${deal.address ?? ""} op ${dateStr} om ${timeStr}. We kijken ernaar uit u te ontvangen!`,
+        status: "concept",
+        trigger_event: "Bezichtiging bevestiging",
+        scheduled_at: null,
+      });
+    }
+
+    setSaving(false);
+    setShowForm(false);
+    setFormScheduledAt(nowLocalIso());
+    load();
+    void buyer;
+  }
+
+  async function handleRating(viewingId: string, rating: number) {
+    setViewings((prev) => prev.map((v) => v.id === viewingId ? { ...v, rating } : v));
+    await supabase.from("viewings").update({ rating }).eq("id", viewingId);
+  }
+
+  async function handleStatusChange(viewingId: string, status: Viewing["status"]) {
+    setViewings((prev) => prev.map((v) => v.id === viewingId ? { ...v, status } : v));
+    await supabase.from("viewings").update({ status }).eq("id", viewingId);
+  }
+
+  async function handleSaveFeedback(viewingId: string) {
+    setSavingFeedback(viewingId);
+    await supabase.from("viewings").update({ feedback: feedbackDraft[viewingId] ?? "" }).eq("id", viewingId);
+    setViewings((prev) => prev.map((v) => v.id === viewingId ? { ...v, feedback: feedbackDraft[viewingId] ?? "" } : v));
+    setSavingFeedback(null);
+  }
+
+  function resolveBuyer(contactId: string | null): string {
+    if (!contactId) return "Onbekend";
+    const found = buyers.find((b) => b.id === contactId);
+    return found?.name ?? "Onbekend";
+  }
+
+  return (
+    <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "14px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>
+          Bezichtigingen
+        </span>
+        <button
+          onClick={() => setShowForm(true)}
+          style={{ padding: "6px 14px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
+        >
+          + Inplannen
+        </button>
+      </div>
+
+      {/* Stats row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
+        {[
+          { label: "Totaal",            value: String(total) },
+          { label: "Bevestigd",         value: String(bevestigd) },
+          { label: "Gem. beoordeling",  value: avgRating ? `★ ${avgRating}` : "—" },
+        ].map((s) => (
+          <div key={s.label} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "10px", padding: "14px" }}>
+            <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.7px", marginBottom: "6px" }}>{s.label}</div>
+            <div style={{ fontSize: "20px", fontWeight: "700", color: "#0f172a", letterSpacing: "-0.5px" }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Add form */}
+      {showForm && (
+        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px" }}>
+          <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "12px" }}>Bezichtiging inplannen</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+            <div>
+              <label style={lbl}>Koper</label>
+              <select value={formContactId} onChange={(e) => setFormContactId(e.target.value)} style={inp}>
+                {buyers.length === 0 && <option value="">Geen kopers gevonden</option>}
+                {buyers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>Datum &amp; tijd</label>
+              <input type="datetime-local" value={formScheduledAt} onChange={(e) => setFormScheduledAt(e.target.value)} style={inp} />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+            <button onClick={() => setShowForm(false)} style={{ padding: "7px 14px", background: "transparent", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: "600", color: "#64748b", cursor: "pointer" }}>
+              Annuleren
+            </button>
+            <button onClick={handleInplannen} disabled={saving || !formContactId} style={{ padding: "7px 14px", background: "#0284c7", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "600", color: "#fff", cursor: saving ? "default" : "pointer", opacity: saving || !formContactId ? 0.6 : 1 }}>
+              {saving ? "Opslaan…" : "Inplannen"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Viewing cards */}
+      {loading ? null : viewings.length === 0 ? (
+        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "40px 32px", textAlign: "center" }}>
+          <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>Nog geen bezichtigingen gepland</div>
+          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 16px" }}>Plan de eerste bezichtiging in om te beginnen.</p>
+          <button onClick={() => setShowForm(true)} style={{ padding: "7px 14px", background: "#0284c7", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "600", color: "#fff", cursor: "pointer" }}>
+            + Eerste bezichtiging inplannen
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {viewings.map((v) => {
+            const buyerName = resolveBuyer(v.contact_id);
+            const dt = new Date(v.scheduled_at);
+            const dateStr = dt.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long" });
+            const timeStr = dt.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+            const badge = VIEWING_STATUS[v.status] ?? VIEWING_STATUS.bevestigd;
+            const isVoltooid = v.status === "voltooid";
+            const canRate = v.rating === null;
+
+            return (
+              <div key={v.id} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px 16px" }}>
+                {/* Top row */}
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "8px" }}>
+                  <div>
+                    <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{buyerName}</div>
+                    <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>{dateStr} · {timeStr}</div>
+                  </div>
+                  <select
+                    value={v.status}
+                    onChange={(e) => handleStatusChange(v.id, e.target.value as Viewing["status"])}
+                    style={{ fontSize: "10px", fontWeight: "600", padding: "3px 8px", borderRadius: "999px", background: badge.bg, color: badge.color, border: "none", cursor: "pointer", appearance: "none", WebkitAppearance: "none" }}
+                  >
+                    <option value="bevestigd">Bevestigd</option>
+                    <option value="voltooid">Voltooid</option>
+                    <option value="niet verschenen">Niet verschenen</option>
+                  </select>
+                </div>
+
+                {/* Star rating */}
+                <div style={{ marginBottom: isVoltooid ? "10px" : "0" }}>
+                  <StarRating value={v.rating} onChange={canRate ? (r) => handleRating(v.id, r) : undefined} />
+                </div>
+
+                {/* Feedback (only when voltooid) */}
+                {isVoltooid && (
+                  <div style={{ marginTop: "10px" }}>
+                    <textarea
+                      rows={3}
+                      value={feedbackDraft[v.id] ?? ""}
+                      onChange={(e) => setFeedbackDraft((prev) => ({ ...prev, [v.id]: e.target.value }))}
+                      placeholder="Noteer de feedback van de bezichtiging…"
+                      style={{ ...inp, resize: "vertical", marginBottom: "8px" }}
+                    />
+                    <button
+                      onClick={() => handleSaveFeedback(v.id)}
+                      disabled={savingFeedback === v.id}
+                      style={{ padding: "6px 12px", background: "#0284c7", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "600", color: "#fff", cursor: "pointer", opacity: savingFeedback === v.id ? 0.6 : 1 }}
+                    >
+                      {savingFeedback === v.id ? "Opslaan…" : "Feedback opslaan"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const CHECKLIST_ITEMS = [
   "Concept transportakte ontvangen",
   "Wwft dossier compleet",
@@ -1570,6 +1841,10 @@ export default function DealDetailPage() {
             </div>
           )}
 
+          {activeNav === "bezichtigingen" && (
+            <BezichtigingenSection deal={deal} dealId={dealId} />
+          )}
+
           {activeNav === "verkoper" && (
             <VerkoperSection deal={deal} dealId={dealId} />
           )}
@@ -1594,7 +1869,7 @@ export default function DealDetailPage() {
             <WhatsAppSection deal={deal} dealId={dealId} />
           )}
 
-          {activeNav !== "overzicht" && activeNav !== "verkoper" && activeNav !== "documenten" && activeNav !== "gesprekken" && activeNav !== "overdracht" && activeNav !== "wwft" && activeNav !== "whatsapp" && (
+          {activeNav !== "overzicht" && activeNav !== "bezichtigingen" && activeNav !== "verkoper" && activeNav !== "documenten" && activeNav !== "gesprekken" && activeNav !== "overdracht" && activeNav !== "wwft" && activeNav !== "whatsapp" && (
             <div style={{ padding: "40px 24px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%" }}>
               <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "40px 32px", textAlign: "center", maxWidth: "360px", width: "100%" }}>
                 <div style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>
