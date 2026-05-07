@@ -710,6 +710,8 @@ export default function DealDetailPage() {
   const [currentStage, setCurrentStage] = useState<DealStage>("lead");
   const [stageDropdownOpen, setStageDropdownOpen] = useState(false);
   const [stageToast, setStageToast] = useState("");
+  const [closingModal, setClosingModal] = useState(false);
+  const [closingLoading, setClosingLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -734,6 +736,29 @@ export default function DealDetailPage() {
     }
     load();
   }, [dealId]);
+
+  async function handleCloseDeal() {
+    if (!deal) return;
+    setClosingLoading(true);
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from("deals").update({ stage: "gesloten" }).eq("id", dealId);
+    if (user) {
+      await supabase.from("messages").insert({
+        owner_id: user.id,
+        deal_id: dealId,
+        channel: "whatsapp",
+        content: "Gefeliciteerd met jullie nieuwe woning! 🏠 Het was een plezier om jullie te begeleiden. Mocht u nog vragen hebben, staan wij altijd voor u klaar.",
+        trigger_event: "Deal gesloten",
+        status: "concept",
+      });
+    }
+    setClosingModal(false);
+    setCurrentStage("gesloten");
+    setStageToast("Deal gesloten 🎉");
+    setClosingLoading(false);
+    setTimeout(() => router.push("/dashboard"), 2000);
+  }
 
   async function handleStageChange(newStage: DealStage) {
     setCurrentStage(newStage);
@@ -855,6 +880,47 @@ export default function DealDetailPage() {
           })}
         </div>
       </div>
+
+      {/* Overdracht → close deal banner */}
+      {currentStage === "overdracht" && (
+        <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "14px 20px", margin: "12px 24px 0", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+          <span style={{ fontSize: "13px", color: "#15803d", fontWeight: "500" }}>🎉 Bijna klaar — markeer deze deal als gesloten</span>
+          <button
+            onClick={() => setClosingModal(true)}
+            style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: "8px", padding: "8px 18px", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}
+          >
+            Deal sluiten
+          </button>
+        </div>
+      )}
+
+      {/* Confirmation modal */}
+      {closingModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: "14px", padding: "28px", maxWidth: "400px", width: "calc(100% - 48px)", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+            <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", margin: "0 0 12px" }}>Deal afsluiten</h2>
+            <p style={{ fontSize: "14px", color: "#64748b", lineHeight: 1.6, margin: "0 0 24px" }}>
+              Weet je zeker dat je deze deal wilt markeren als gesloten? Dit start de post-sale automations.
+            </p>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setClosingModal(false)}
+                disabled={closingLoading}
+                style={{ padding: "9px 18px", borderRadius: "8px", border: "1px solid #e8ecf0", background: "#fff", color: "#64748b", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}
+              >
+                Annuleren
+              </button>
+              <button
+                onClick={handleCloseDeal}
+                disabled={closingLoading}
+                style={{ padding: "9px 18px", borderRadius: "8px", border: "none", background: "#16a34a", color: "#fff", fontSize: "13px", fontWeight: "600", cursor: "pointer", opacity: closingLoading ? 0.6 : 1 }}
+              >
+                {closingLoading ? "Bezig…" : "Ja, deal sluiten"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Two-column layout */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>

@@ -155,6 +155,7 @@ function DealCard({ deal, onClick }: { deal: DealWithContacts; onClick: () => vo
         cursor: "pointer",
         marginBottom: "8px",
         transition: "box-shadow 0.15s",
+        opacity: deal.stage === "gesloten" ? 0.6 : 1,
       }}
       onMouseEnter={(e) => { setHovered(true); e.currentTarget.style.borderColor = "#cbd5e1"; }}
       onMouseLeave={(e) => { setHovered(false); e.currentTarget.style.borderColor = "#e8ecf0"; }}
