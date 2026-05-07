@@ -16,6 +16,13 @@ const STAGES: { id: DealStage; label: string }[] = [
   { id: "gesloten",     label: "Gesloten" },
 ];
 
+const stageProgress: Record<DealStage, number> = {
+  lead: 5, bezichtiging: 20, bod: 35,
+  koopakte: 50, voorwaarden: 62,
+  financiering: 75, overdracht: 90,
+  gesloten: 100,
+};
+
 const STAGE_BADGE: Record<DealStage, { bg: string; text: string; dot: string }> = {
   lead:         { bg: "#f1f5f9", text: "#64748b", dot: "#94a3b8" },
   bezichtiging: { bg: "#fef9c3", text: "#854d0e", dot: "#eab308" },
@@ -700,20 +707,43 @@ export default function DealDetailPage() {
   const [deal, setDeal] = useState<DealWithContacts | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeNav, setActiveNav] = useState<SubNav>("overzicht");
+  const [currentStage, setCurrentStage] = useState<DealStage>("lead");
+  const [stageDropdownOpen, setStageDropdownOpen] = useState(false);
+  const [stageToast, setStageToast] = useState("");
 
   useEffect(() => {
     async function load() {
       const supabase = createClient();
-      const { data } = await supabase
+      const { data: dealData } = await supabase
         .from("deals")
-        .select(`*, buyer:contacts!deals_buyer_id_fkey(name,email,phone), seller:contacts!deals_seller_id_fkey(name,email,phone)`)
+        .select("*")
         .eq("id", dealId)
         .single();
-      setDeal(data as DealWithContacts | null);
+      if (!dealData) { setLoading(false); return; }
+      const [buyerRes, sellerRes] = await Promise.all([
+        dealData.buyer_id
+          ? supabase.from("contacts").select("name,email,phone").eq("id", dealData.buyer_id).single()
+          : Promise.resolve({ data: null }),
+        dealData.seller_id
+          ? supabase.from("contacts").select("name,email,phone").eq("id", dealData.seller_id).single()
+          : Promise.resolve({ data: null }),
+      ]);
+      setDeal({ ...dealData, buyer: buyerRes.data, seller: sellerRes.data } as DealWithContacts);
+      setCurrentStage(dealData.stage as DealStage);
       setLoading(false);
     }
     load();
   }, [dealId]);
+
+  async function handleStageChange(newStage: DealStage) {
+    setCurrentStage(newStage);
+    setStageDropdownOpen(false);
+    const supabase = createClient();
+    await supabase.from("deals").update({ stage: newStage }).eq("id", dealId);
+    const label = STAGES.find((s) => s.id === newStage)?.label ?? newStage;
+    setStageToast(`Fase bijgewerkt naar ${label}`);
+    setTimeout(() => setStageToast(""), 2500);
+  }
 
   if (loading) {
     return (
@@ -731,10 +761,10 @@ export default function DealDetailPage() {
     );
   }
 
-  const stageIdx = STAGES.findIndex((s) => s.id === deal.stage);
-  const badge = STAGE_BADGE[deal.stage as DealStage] ?? STAGE_BADGE.lead;
+  const stageIdx = STAGES.findIndex((s) => s.id === currentStage);
+  const badge = STAGE_BADGE[currentStage] ?? STAGE_BADGE.lead;
   const days = daysSince(deal.created_at);
-  const progress = Math.round(((stageIdx + 1) / STAGES.length) * 100);
+  const progress = stageProgress[currentStage] ?? 0;
 
   const ACTIONS = [
     { label: "Document genereren",    color: "#0284c7", bg: "#f0f9ff", border: "rgba(2,132,199,0.2)" },
@@ -745,6 +775,13 @@ export default function DealDetailPage() {
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* Stage toast */}
+      {stageToast && (
+        <div style={{ position: "fixed", bottom: "24px", right: "24px", background: "#0f172a", color: "#fff", padding: "12px 18px", borderRadius: "10px", fontSize: "13px", fontWeight: "600", zIndex: 999, boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}>
+          {stageToast}
+        </div>
+      )}
+
       {/* Top bar */}
       <div style={{ height: "56px", background: "#fff", borderBottom: "1px solid #e8ecf0", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -755,10 +792,37 @@ export default function DealDetailPage() {
           {deal.city && <span style={{ fontSize: "14px", color: "#94a3b8" }}>{deal.city}</span>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "600", background: badge.bg, color: badge.text }}>
-            <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: badge.dot }} />
-            {STAGES.find((s) => s.id === deal.stage)?.label}
-          </span>
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setStageDropdownOpen((o) => !o)}
+              style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "600", background: badge.bg, color: badge.text, border: "none", cursor: "pointer" }}
+            >
+              <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: badge.dot }} />
+              {STAGES.find((s) => s.id === currentStage)?.label}
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "2px" }}><polyline points="6,9 12,15 18,9" /></svg>
+            </button>
+            {stageDropdownOpen && (
+              <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "#fff", border: "1px solid #e8ecf0", borderRadius: "10px", boxShadow: "0 8px 24px rgba(0,0,0,0.10)", zIndex: 200, minWidth: "180px", padding: "4px" }}>
+                {STAGES.map((s) => {
+                  const b = STAGE_BADGE[s.id];
+                  const active = s.id === currentStage;
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => handleStageChange(s.id)}
+                      style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "8px 10px", border: "none", borderRadius: "7px", cursor: "pointer", background: active ? "#f8fafc" : "transparent", fontSize: "13px", color: "#0f172a", textAlign: "left" }}
+                      onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = "#f8fafc"; }}
+                      onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+                    >
+                      <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: b.dot, flexShrink: 0 }} />
+                      <span style={{ flex: 1 }}>{s.label}</span>
+                      {active && <span style={{ color: "#0284c7", fontSize: "12px" }}>✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           {(deal.agreed_price ?? deal.value) != null && (
             <span style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", letterSpacing: "-0.4px" }}>
               {formatEuro(deal.agreed_price ?? deal.value ?? 0)}
@@ -827,7 +891,7 @@ export default function DealDetailPage() {
                   { label: "Koopsom",   value: deal.agreed_price ? formatEuro(deal.agreed_price) : "—" },
                   { label: "Looptijd",  value: `${days} dagen` },
                   { label: "Voortgang", value: `${progress}%` },
-                  { label: "Status",    value: STAGES.find((s) => s.id === deal.stage)?.label ?? "—" },
+                  { label: "Status",    value: STAGES.find((s) => s.id === currentStage)?.label ?? "—" },
                 ].map((stat) => (
                   <div key={stat.label} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "10px", padding: "14px" }}>
                     <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.7px", marginBottom: "6px" }}>{stat.label}</div>
