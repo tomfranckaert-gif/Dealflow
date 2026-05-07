@@ -3,6 +3,15 @@ import { NextResponse } from "next/server";
 export async function POST(req: Request) {
   const { dealAddress, dealCity, recipientName, triggerEvent, agentName } = await req.json();
 
+  const parts: string[] = []
+  if (agentName) parts.push(`Je bent makelaar ${agentName}.`)
+  if (dealAddress) parts.push(`Woning: ${dealAddress}${dealCity ? ' in ' + dealCity : ''}.`)
+  if (recipientName) parts.push(`Ontvanger: ${recipientName}.`)
+  if (triggerEvent) parts.push(`Context: ${triggerEvent}.`)
+  parts.push('Schrijf een kort vriendelijk WhatsApp bericht in het Nederlands. Maximaal 3 zinnen.')
+
+  const prompt = parts.join(' ')
+
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -16,7 +25,7 @@ export async function POST(req: Request) {
       messages: [
         {
           role: "user",
-          content: `Je bent een Nederlandse makelaar genaamd ${agentName}. Schrijf een kort, professioneel maar vriendelijk WhatsApp bericht aan ${recipientName} over de woning ${dealAddress} in ${dealCity}. Context: ${triggerEvent}. Maximaal 3 zinnen. Geen aanhalingstekens. Eindig met "— ${agentName}"`,
+          content: prompt,
         },
       ],
     }),
