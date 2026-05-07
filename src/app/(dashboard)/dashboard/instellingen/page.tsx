@@ -70,14 +70,33 @@ export default function InstellingenPage() {
     async function load() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) setEmail(user.email ?? "");
+      if (!user) return;
+      setEmail(user.email ?? "");
+      const { data: agent } = await supabase
+        .from("agents")
+        .select("name, phone, office_name")
+        .eq("id", user.id)
+        .single();
+      if (agent) {
+        if (agent.name) setName(agent.name);
+        if (agent.phone) setPhone(agent.phone);
+        if (agent.office_name) setCompany(agent.office_name);
+      }
     }
     load();
   }, []);
 
   async function handleSaveProfile() {
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 600));
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from("agents").update({
+        name: name || null,
+        phone: phone || null,
+        office_name: company || null,
+      }).eq("id", user.id);
+    }
     setSaving(false);
     setToast("Profiel opgeslagen");
     setTimeout(() => setToast(""), 2500);

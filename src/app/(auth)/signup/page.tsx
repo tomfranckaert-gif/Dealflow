@@ -17,8 +17,14 @@ export default function SignupPage() {
     setLoading(true);
     setError(null);
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data: signUpData, error } = await supabase.auth.signUp({ email, password });
     if (error) { setError(error.message); setLoading(false); return; }
+    if (signUpData.user) {
+      await supabase.from("agents").upsert(
+        { id: signUpData.user.id, email },
+        { onConflict: "id", ignoreDuplicates: true }
+      );
+    }
     const agentName = email.split("@")[0];
     fetch("/api/send-email", {
       method: "POST",

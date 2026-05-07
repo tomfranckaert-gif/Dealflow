@@ -98,7 +98,7 @@ const NAV = [
   },
 ];
 
-export default function Sidebar({ userEmail }: { userEmail: string }) {
+export default function Sidebar({ userEmail, agentName }: { userEmail: string; agentName?: string | null }) {
   const pathname = usePathname();
 
   async function handleSignOut() {
@@ -107,8 +107,8 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
     window.location.href = "/login";
   }
 
-  const displayEmail = userEmail || "—";
-  const initials = displayEmail.charAt(0).toUpperCase();
+  const displayName = agentName || userEmail || "—";
+  const initials = displayName.charAt(0).toUpperCase();
 
   return (
     <aside style={{ width: "220px", minWidth: "220px", background: "#ffffff", borderRight: "1px solid #e8ecf0", display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0 }}>
@@ -168,8 +168,8 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
             {initials}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayEmail}</div>
-            <div style={{ fontSize: "11px", color: "#94a3b8" }}>Makelaar</div>
+            <div style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName}</div>
+            <div style={{ fontSize: "11px", color: "#94a3b8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{agentName ? userEmail : "Makelaar"}</div>
           </div>
           <button onClick={handleSignOut} title="Uitloggen" style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", display: "flex", padding: "2px" }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

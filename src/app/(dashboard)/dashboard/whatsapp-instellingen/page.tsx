@@ -295,7 +295,7 @@ export default function WhatsAppInstellingenPage() {
 
   const [sequences, setSequences]   = useState<Sequence[]>([]);
   const [savingSeq, setSavingSeq]   = useState<string | null>(null);
-  const [agentId, setAgentId]       = useState<string | null>(null);
+  const [userId, setUserId]         = useState<string | null>(null);
 
   const [toast, setToast]           = useState("");
 
@@ -311,40 +311,39 @@ export default function WhatsAppInstellingenPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    setUserId(user.id);
+
     // Load agent profile
     const { data: agent } = await supabase
       .from("agents")
-      .select("id, whatsapp_tone, whatsapp_office_name, whatsapp_signature")
-      .eq("user_id", user.id)
+      .select("whatsapp_tone, whatsapp_office_name, whatsapp_signature")
+      .eq("id", user.id)
       .single();
 
     if (agent) {
-      setAgentId(agent.id);
       if (agent.whatsapp_tone) setTone(agent.whatsapp_tone as ToneKey);
       if (agent.whatsapp_office_name) setOfficeName(agent.whatsapp_office_name);
       if (agent.whatsapp_signature) setSignature(agent.whatsapp_signature);
+    }
 
-      // Load sequences
-      const { data: seqs } = await supabase
-        .from("whatsapp_sequences")
-        .select("*")
-        .eq("agent_id", agent.id)
-        .order("created_at", { ascending: true });
+    // Load sequences
+    const { data: seqs } = await supabase
+      .from("whatsapp_sequences")
+      .select("*")
+      .eq("agent_id", user.id)
+      .order("created_at", { ascending: true });
 
-      if (seqs && seqs.length > 0) {
-        setSequences(seqs as Sequence[]);
-      } else {
-        // Insert defaults
-        const inserts = DEFAULTS.map((d) => ({ ...d, agent_id: agent.id }));
-        const { data: inserted } = await supabase
-          .from("whatsapp_sequences")
-          .insert(inserts)
-          .select("*");
-        if (inserted) setSequences(inserted as Sequence[]);
-        else setSequences(DEFAULTS.map((d) => ({ ...d })));
-      }
+    if (seqs && seqs.length > 0) {
+      setSequences(seqs as Sequence[]);
     } else {
-      setSequences(DEFAULTS.map((d) => ({ ...d })));
+      // Insert defaults
+      const inserts = DEFAULTS.map((d) => ({ ...d, agent_id: user.id }));
+      const { data: inserted } = await supabase
+        .from("whatsapp_sequences")
+        .insert(inserts)
+        .select("*");
+      if (inserted) setSequences(inserted as Sequence[]);
+      else setSequences(DEFAULTS.map((d) => ({ ...d })));
     }
   }, []);
 
@@ -355,13 +354,12 @@ export default function WhatsAppInstellingenPage() {
   async function handleSaveProfile() {
     setSavingProfile(true);
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user && agentId) {
+    if (userId) {
       await supabase.from("agents").update({
         whatsapp_tone: tone,
         whatsapp_office_name: officeName,
         whatsapp_signature: signature,
-      }).eq("id", agentId);
+      }).eq("id", userId);
     }
     setSavingProfile(false);
     showToast("Instellingen opgeslagen");
@@ -381,9 +379,9 @@ export default function WhatsAppInstellingenPage() {
         template: seq.template,
         updated_at: new Date().toISOString(),
       }).eq("id", seq.id);
-    } else if (agentId) {
+    } else if (userId) {
       const { data } = await supabase.from("whatsapp_sequences").insert({
-        agent_id: agentId,
+        agent_id: userId,
         trigger_key: seq.trigger_key,
         enabled: seq.enabled,
         timing_value: seq.timing_value,
