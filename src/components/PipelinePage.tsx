@@ -32,6 +32,95 @@ function daysSince(d: string) {
   return Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
 }
 
+function timeAgo(d: string) {
+  const diff = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
+  if (diff < 60) return `${diff}m geleden`;
+  if (diff < 1440) return `${Math.floor(diff / 60)}u geleden`;
+  return `${Math.floor(diff / 1440)}d geleden`;
+}
+
+interface Alert {
+  id: string;
+  type: "deadline" | "actie" | "update" | "stale";
+  title: string;
+  subtitle: string;
+  timeAgo: string;
+  borderColor: string;
+  icon: string;
+}
+
+function buildAlerts(deals: DealWithContacts[]): Alert[] {
+  const alerts: Alert[] = [];
+  const now = Date.now();
+
+  for (const deal of deals) {
+    const name = deal.address ?? deal.title ?? "Deal";
+
+    // Voorwaarden + transfer_date deadline alerts
+    if (deal.stage === "voorwaarden" && deal.transfer_date) {
+      const daysLeft = Math.floor((new Date(deal.transfer_date).getTime() - now) / 86400000);
+      if (daysLeft >= 0 && daysLeft < 3) {
+        alerts.push({
+          id: `deadline-${deal.id}`,
+          type: "deadline",
+          title: "Deadline nadert",
+          subtitle: `${name} — nog ${daysLeft === 0 ? "vandaag" : `${daysLeft} dag${daysLeft === 1 ? "" : "en"}`}`,
+          timeAgo: timeAgo(deal.updated_at ?? deal.created_at),
+          borderColor: "#ef4444",
+          icon: "🔴",
+        });
+        continue;
+      }
+      if (daysLeft >= 3 && daysLeft <= 7) {
+        alerts.push({
+          id: `actie-${deal.id}`,
+          type: "actie",
+          title: "Actie vereist",
+          subtitle: `${name} — voorwaarden vervallen over ${daysLeft} dagen`,
+          timeAgo: timeAgo(deal.updated_at ?? deal.created_at),
+          borderColor: "#f59e0b",
+          icon: "🟡",
+        });
+        continue;
+      }
+    }
+
+    // Voorwaarden stage > 14 days with no transfer_date
+    if (deal.stage === "voorwaarden") {
+      const daysIn = Math.floor((now - new Date(deal.created_at).getTime()) / 86400000);
+      if (daysIn > 14) {
+        alerts.push({
+          id: `vw-stale-${deal.id}`,
+          type: "actie",
+          title: "Actie vereist",
+          subtitle: `${name} staat al ${daysIn} dagen in Voorwaarden`,
+          timeAgo: timeAgo(deal.created_at),
+          borderColor: "#f59e0b",
+          icon: "🟡",
+        });
+      }
+    }
+
+    // No activity > 7 days (any non-closed deal)
+    if (deal.stage !== "gesloten") {
+      const daysSinceActivity = Math.floor((now - new Date(deal.updated_at ?? deal.created_at).getTime()) / 86400000);
+      if (daysSinceActivity > 7) {
+        alerts.push({
+          id: `stale-${deal.id}`,
+          type: "update",
+          title: "Deal update",
+          subtitle: `${name} — geen activiteit in ${daysSinceActivity} dagen`,
+          timeAgo: timeAgo(deal.updated_at ?? deal.created_at),
+          borderColor: "#0284c7",
+          icon: "🔵",
+        });
+      }
+    }
+  }
+
+  return alerts;
+}
+
 function isUrgent(deal: DealWithContacts) {
   if (!deal.transfer_date) return false;
   const days = Math.floor((new Date(deal.transfer_date).getTime() - Date.now()) / 86400000);
@@ -114,6 +203,11 @@ export default function PipelinePage({ deals }: Props) {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<DealStage | "alle">("alle");
   const [search, setSearch] = useState("");
+  const [bellOpen, setBellOpen] = useState(false);
+  const [read, setRead] = useState(false);
+
+  const alerts = buildAlerts(deals);
+  const hasAlerts = alerts.length > 0 && !read;
 
   const filtered = deals.filter((deal) => {
     const stageMatch = activeFilter === "alle" || deal.stage === activeFilter;
@@ -150,6 +244,67 @@ export default function PipelinePage({ deals }: Props) {
               style={{ border: "none", background: "transparent", fontSize: "13px", color: "#0f172a", outline: "none", width: "140px" }}
             />
           </div>
+          {/* Bell */}
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setBellOpen((o) => !o)}
+              style={{ position: "relative", background: "none", border: "none", cursor: "pointer", padding: "6px", display: "flex", alignItems: "center", color: "#64748b" }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              {hasAlerts && (
+                <span style={{ position: "absolute", top: "4px", right: "4px", width: "8px", height: "8px", borderRadius: "50%", background: "#ef4444", border: "2px solid #fff" }} />
+              )}
+            </button>
+
+            {bellOpen && (
+              <>
+                {/* Click-away overlay */}
+                <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setBellOpen(false)} />
+                {/* Dropdown */}
+                <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: "320px", background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.08)", zIndex: 50, overflow: "hidden" }}>
+                  {/* Header */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
+                    <span style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>Meldingen</span>
+                    {alerts.length > 0 && (
+                      <button
+                        onClick={() => { setRead(true); setBellOpen(false); }}
+                        style={{ fontSize: "11px", color: "#0284c7", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                      >
+                        Alles als gelezen markeren
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Alert list */}
+                  {alerts.length === 0 ? (
+                    <div style={{ padding: "32px 16px", textAlign: "center", fontSize: "13px", color: "#94a3b8" }}>
+                      Geen nieuwe meldingen
+                    </div>
+                  ) : (
+                    <div style={{ maxHeight: "340px", overflowY: "auto" }}>
+                      {alerts.map((alert) => (
+                        <div
+                          key={alert.id}
+                          style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "12px 16px", borderLeft: `3px solid ${alert.borderColor}`, borderBottom: "1px solid #f8fafc" }}
+                        >
+                          <span style={{ fontSize: "14px", flexShrink: 0, marginTop: "1px" }}>{alert.icon}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: "13px", fontWeight: "500", color: "#0f172a", marginBottom: "2px" }}>{alert.title}</div>
+                            <div style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{alert.subtitle}</div>
+                          </div>
+                          <span style={{ fontSize: "10px", color: "#94a3b8", whiteSpace: "nowrap", flexShrink: 0, marginTop: "2px" }}>{alert.timeAgo}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
           <Link href="/dashboard/new-deal" style={{ background: "#0284c7", color: "#fff", borderRadius: "8px", padding: "8px 14px", fontSize: "13px", fontWeight: "600", textDecoration: "none", whiteSpace: "nowrap" }}>
             + Nieuwe deal
           </Link>
