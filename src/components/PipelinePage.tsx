@@ -65,7 +65,7 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
           type: "deadline",
           title: "Deadline nadert",
           subtitle: `${name} — nog ${daysLeft === 0 ? "vandaag" : `${daysLeft} dag${daysLeft === 1 ? "" : "en"}`}`,
-          timeAgo: timeAgo(deal.updated_at ?? deal.created_at),
+          timeAgo: timeAgo(deal.created_at),
           borderColor: "#ef4444",
           icon: "🔴",
         });
@@ -77,7 +77,7 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
           type: "actie",
           title: "Actie vereist",
           subtitle: `${name} — voorwaarden vervallen over ${daysLeft} dagen`,
-          timeAgo: timeAgo(deal.updated_at ?? deal.created_at),
+          timeAgo: timeAgo(deal.created_at),
           borderColor: "#f59e0b",
           icon: "🟡",
         });
@@ -103,14 +103,14 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
 
     // No activity > 7 days (any non-closed deal)
     if (deal.stage !== "gesloten") {
-      const daysSinceActivity = Math.floor((now - new Date(deal.updated_at ?? deal.created_at).getTime()) / 86400000);
+      const daysSinceActivity = Math.floor((now - new Date(deal.created_at).getTime()) / 86400000);
       if (daysSinceActivity > 7) {
         alerts.push({
           id: `stale-${deal.id}`,
           type: "update",
           title: "Deal update",
           subtitle: `${name} — geen activiteit in ${daysSinceActivity} dagen`,
-          timeAgo: timeAgo(deal.updated_at ?? deal.created_at),
+          timeAgo: timeAgo(deal.created_at),
           borderColor: "#0284c7",
           icon: "🔵",
         });
