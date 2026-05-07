@@ -970,6 +970,149 @@ function GesprekkenSection({ deal, dealId }: { deal: DealWithContacts; dealId: s
   );
 }
 
+const CHECKLIST_ITEMS = [
+  "Concept transportakte ontvangen",
+  "Wwft dossier compleet",
+  "VvE documenten compleet",
+  "Waarborgsom gestort",
+  "Hypotheekoffer getekend",
+  "Bouwkundige keuring akkoord",
+  "Eindopname gepland",
+  "Meterstanden genoteerd",
+  "Sleutels overgedragen",
+  "Transportakte getekend bij notaris",
+  "Nutsvoorzieningen overgedragen",
+];
+
+function OverdrachtSection({ deal }: { deal: DealWithContacts }) {
+  const [checked, setChecked] = useState<boolean[]>(() => CHECKLIST_ITEMS.map(() => false));
+  const [meters, setMeters] = useState({ gas: "", water: "", elektriciteit: "", warmte: "" });
+  const [metersSaved, setMetersSaved] = useState(false);
+
+  const completedCount = checked.filter(Boolean).length;
+  const total = CHECKLIST_ITEMS.length;
+  const pct = Math.round((completedCount / total) * 100);
+  const allDone = completedCount === total;
+
+  function toggle(i: number) {
+    setChecked((prev) => { const next = [...prev]; next[i] = !next[i]; return next; });
+  }
+
+  function saveMeta() { setMetersSaved(true); setTimeout(() => setMetersSaved(false), 2000); }
+
+  const transferDateStr = deal.transfer_date
+    ? new Date(deal.transfer_date).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })
+    : null;
+
+  return (
+    <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "14px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>
+          Overdracht
+        </span>
+        {transferDateStr ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+            <span style={{ fontSize: "12px", fontWeight: "600", color: "#0284c7" }}>{transferDateStr}</span>
+          </div>
+        ) : (
+          <span style={{ fontSize: "12px", color: "#94a3b8" }}>Datum nog niet ingesteld</span>
+        )}
+      </div>
+
+      {/* Completion banner */}
+      {allDone && (
+        <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "12px", padding: "14px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
+          <span style={{ fontSize: "18px" }}>🎉</span>
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: "700", color: "#15803d" }}>Overdracht compleet</div>
+            <div style={{ fontSize: "11px", color: "#16a34a" }}>Post-sale automations worden gestart</div>
+          </div>
+        </div>
+      )}
+
+      {/* Checklist card */}
+      <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px" }}>
+        <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "12px" }}>
+          Overdrachtschieckllist
+        </div>
+        {/* Progress */}
+        <div style={{ marginBottom: "14px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ fontSize: "11px", fontWeight: "600", color: "#0f172a" }}>{completedCount} van {total} voltooid</span>
+            <span style={{ fontSize: "11px", fontWeight: "600", color: "#0284c7" }}>{pct}%</span>
+          </div>
+          <div style={{ height: "6px", background: "#e8ecf0", borderRadius: "999px", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${pct}%`, background: "#0284c7", borderRadius: "999px", transition: "width 0.25s ease" }} />
+          </div>
+        </div>
+        {/* Items */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+          {CHECKLIST_ITEMS.map((item, i) => (
+            <label
+              key={item}
+              style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 6px", borderRadius: "8px", cursor: "pointer" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            >
+              <input
+                type="checkbox"
+                checked={checked[i]}
+                onChange={() => toggle(i)}
+                style={{ width: "15px", height: "15px", accentColor: "#0284c7", cursor: "pointer", flexShrink: 0 }}
+              />
+              <span style={{ fontSize: "13px", color: checked[i] ? "#94a3b8" : "#0f172a", textDecoration: checked[i] ? "line-through" : "none", transition: "color 0.15s" }}>
+                {item}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Meterstanden card */}
+      <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px" }}>
+        <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "14px" }}>
+          Meterstanden
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+          {(
+            [
+              { key: "gas",          label: "Gas (m³)" },
+              { key: "water",        label: "Water (m³)" },
+              { key: "elektriciteit", label: "Elektriciteit (kWh)" },
+              { key: "warmte",       label: "Warmte (GJ)" },
+            ] as { key: keyof typeof meters; label: string }[]
+          ).map(({ key, label }) => (
+            <div key={key}>
+              <label style={lbl}>{label}</label>
+              <input
+                type="number"
+                min="0"
+                value={meters[key]}
+                onChange={(e) => setMeters((prev) => ({ ...prev, [key]: e.target.value }))}
+                placeholder="0"
+                style={inp}
+              />
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <button
+            onClick={saveMeta}
+            style={{ padding: "7px 16px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
+          >
+            Opslaan
+          </button>
+          {metersSaved && (
+            <span style={{ fontSize: "12px", color: "#16a34a", fontWeight: "600" }}>✓ Opgeslagen</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function formatEuro(v: number) {
   return "€ " + v.toLocaleString("nl-NL");
 }
@@ -1216,6 +1359,10 @@ export default function DealDetailPage() {
             <GesprekkenSection deal={deal} dealId={dealId} />
           )}
 
+          {activeNav === "overdracht" && (
+            <OverdrachtSection deal={deal} />
+          )}
+
           {activeNav === "wwft" && (
             <WwftSection deal={deal} dealId={dealId} />
           )}
@@ -1224,7 +1371,7 @@ export default function DealDetailPage() {
             <WhatsAppSection deal={deal} dealId={dealId} />
           )}
 
-          {activeNav !== "overzicht" && activeNav !== "documenten" && activeNav !== "gesprekken" && activeNav !== "wwft" && activeNav !== "whatsapp" && (
+          {activeNav !== "overzicht" && activeNav !== "documenten" && activeNav !== "gesprekken" && activeNav !== "overdracht" && activeNav !== "wwft" && activeNav !== "whatsapp" && (
             <div style={{ padding: "40px 24px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%" }}>
               <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "40px 32px", textAlign: "center", maxWidth: "360px", width: "100%" }}>
                 <div style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>
