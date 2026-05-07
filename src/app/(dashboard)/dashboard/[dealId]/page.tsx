@@ -35,12 +35,20 @@ const STAGE_BADGE: Record<DealStage, { bg: string; text: string; dot: string }> 
   gesloten:     { bg: "#f1f5f9", text: "#374151", dot: "#6b7280" },
 };
 
-type SubNav = "overzicht" | "documenten" | "voorwaarden" | "wwft" | "whatsapp" | "gesprekken" | "overdracht";
+type SubNav = "overzicht" | "documenten" | "voorwaarden" | "wwft" | "whatsapp" | "gesprekken" | "overdracht" | "bezichtigingen" | "verkoper";
 
 const SUB_NAV: { id: SubNav; label: string; icon: React.ReactNode }[] = [
   {
     id: "overzicht", label: "Overzicht",
     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>,
+  },
+  {
+    id: "bezichtigingen", label: "Bezichtigingen",
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
+  },
+  {
+    id: "verkoper", label: "Verkoper",
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
   },
   {
     id: "documenten", label: "Documenten",
@@ -640,6 +648,366 @@ function WhatsAppSection({ deal, dealId }: { deal: DealWithContacts; dealId: str
   );
 }
 
+// ─── Section components ───────────────────────────────────────────────────────
+
+const sectionInp: React.CSSProperties = {
+  width: "100%", padding: "9px 12px", border: "1px solid #e8ecf0", borderRadius: "8px",
+  fontSize: "13px", color: "#0f172a", background: "#fff", outline: "none",
+  boxSizing: "border-box", fontFamily: "DM Sans, Helvetica Neue, sans-serif",
+};
+const sectionLbl: React.CSSProperties = {
+  display: "block", fontSize: "10px", fontWeight: "500", color: "#94a3b8",
+  textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "6px",
+};
+
+function SectionWrap({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ padding: "20px 24px", maxWidth: "680px" }}>
+      <div style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "16px" }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px 20px", marginBottom: "12px", ...style }}>
+      {children}
+    </div>
+  );
+}
+
+// ─── Bezichtigingen ───────────────────────────────────────────────────────────
+
+function BezichtigingenSection({ dealId }: { dealId: string }) {
+  const [items, setItems] = useState<{ id: string; date: string; time: string; feedback: string; created_at: string }[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(false);
+
+  const load = useCallback(async () => {
+    const supabase = createClient();
+    const { data } = await supabase.from("bezichtigingen").select("*").eq("deal_id", dealId).order("date", { ascending: true });
+    setItems(data ?? []);
+  }, [dealId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleSave() {
+    if (!date) return;
+    setSaving(true);
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSaving(false); return; }
+    await supabase.from("bezichtigingen").insert({ owner_id: user.id, deal_id: dealId, date, time, feedback });
+    await load();
+    setDate(""); setTime(""); setFeedback(""); setShowForm(false); setSaving(false);
+    setToast(true); setTimeout(() => setToast(false), 2500);
+  }
+
+  return (
+    <SectionWrap title="Bezichtigingen">
+      {toast && <div style={{ position: "fixed", bottom: "24px", right: "24px", background: "#0f172a", color: "#fff", padding: "12px 18px", borderRadius: "10px", fontSize: "13px", fontWeight: "600", zIndex: 999 }}>Opgeslagen ✓</div>}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
+        <button onClick={() => setShowForm(!showForm)} style={{ padding: "7px 14px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>+ Bezichtiging plannen</button>
+      </div>
+      {showForm && (
+        <Card>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+            <div><label style={sectionLbl}>Datum</label><input type="date" value={date} onChange={e => setDate(e.target.value)} style={sectionInp} /></div>
+            <div><label style={sectionLbl}>Tijd</label><input type="time" value={time} onChange={e => setTime(e.target.value)} style={sectionInp} /></div>
+          </div>
+          <div style={{ marginBottom: "12px" }}><label style={sectionLbl}>Feedback koper</label><textarea value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Bijv. interesse, opmerkingen..." rows={3} style={{ ...sectionInp, resize: "vertical", lineHeight: "1.5" }} /></div>
+          <button onClick={handleSave} disabled={saving || !date} style={{ background: "#0284c7", border: "none", borderRadius: "8px", padding: "9px 16px", fontSize: "13px", fontWeight: "600", color: "#fff", cursor: "pointer", opacity: saving || !date ? 0.5 : 1 }}>{saving ? "Opslaan…" : "Opslaan"}</button>
+        </Card>
+      )}
+      {items.length === 0 && !showForm ? (
+        <Card style={{ textAlign: "center", padding: "40px" }}><p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>Nog geen bezichtigingen gepland</p></Card>
+      ) : items.map(item => (
+        <Card key={item.id}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a", marginBottom: "4px" }}>
+                {new Date(item.date).toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long" })}
+                {item.time && <span style={{ fontSize: "13px", color: "#64748b", fontWeight: "400", marginLeft: "8px" }}>om {item.time}</span>}
+              </div>
+              {item.feedback && <div style={{ fontSize: "12px", color: "#64748b", lineHeight: "1.5" }}>{item.feedback}</div>}
+            </div>
+            <span style={{ fontSize: "10px", color: "#94a3b8", whiteSpace: "nowrap", marginLeft: "12px" }}>{new Date(item.created_at).toLocaleDateString("nl-NL")}</span>
+          </div>
+        </Card>
+      ))}
+    </SectionWrap>
+  );
+}
+
+// ─── Verkoper ─────────────────────────────────────────────────────────────────
+
+function VerkoperSection({ deal }: { deal: DealWithContacts }) {
+  const seller = deal.seller;
+  if (!seller) return (
+    <SectionWrap title="Verkoper">
+      <Card style={{ textAlign: "center", padding: "40px" }}><p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>Geen verkoper gekoppeld aan deze deal</p></Card>
+    </SectionWrap>
+  );
+  return (
+    <SectionWrap title="Verkoper">
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+          <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #059669)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: "20px", fontWeight: "700", flexShrink: 0 }}>
+            {seller.name.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a" }}>{seller.name}</div>
+            <div style={{ fontSize: "11px", color: "#94a3b8" }}>Verkoper</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
+          {[
+            { icon: "📞", label: "Telefoon", value: seller.phone },
+            { icon: "✉️", label: "E-mail",   value: seller.email },
+            { icon: "📍", label: "Object",   value: deal.address },
+          ].filter(r => r.value).map(row => (
+            <div key={row.label} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: "8px" }}>
+              <span style={{ fontSize: "16px" }}>{row.icon}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: "10px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.3px" }}>{row.label}</div>
+                <div style={{ fontSize: "13px", color: "#0f172a", fontWeight: "500" }}>{row.value}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {seller.phone && (
+          <a href={`https://wa.me/${seller.phone.replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", color: "#16a34a", fontSize: "12px", fontWeight: "600", textDecoration: "none" }}>
+            WhatsApp sturen
+          </a>
+        )}
+      </Card>
+    </SectionWrap>
+  );
+}
+
+// ─── Documenten ───────────────────────────────────────────────────────────────
+
+const DOCUMENT_TYPES = ["Koopovereenkomst", "Taxatierapport", "Energielabel", "Bouwtechnische keuring", "Eigendomsbewijs", "Hypotheekaanbod", "Overdrachtsdocument"];
+
+function DocumentenSection({ dealId }: { dealId: string }) {
+  const [docs, setDocs] = useState<{ id: string; name: string; type: string; created_at: string }[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [docType, setDocType] = useState(DOCUMENT_TYPES[0]);
+  const [docName, setDocName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    const supabase = createClient();
+    const { data } = await supabase.from("documents").select("*").eq("deal_id", dealId).order("created_at", { ascending: false });
+    setDocs(data ?? []);
+  }, [dealId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleAdd() {
+    const name = docName.trim() || docType;
+    setSaving(true);
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSaving(false); return; }
+    await supabase.from("documents").insert({ owner_id: user.id, deal_id: dealId, name, type: docType });
+    await load();
+    setDocName(""); setShowForm(false); setSaving(false);
+  }
+
+  return (
+    <SectionWrap title="Documenten">
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
+        <button onClick={() => setShowForm(!showForm)} style={{ padding: "7px 14px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>+ Document toevoegen</button>
+      </div>
+      {showForm && (
+        <Card>
+          <div style={{ marginBottom: "10px" }}><label style={sectionLbl}>Type</label><select value={docType} onChange={e => setDocType(e.target.value)} style={{ ...sectionInp }}>{DOCUMENT_TYPES.map(t => <option key={t}>{t}</option>)}</select></div>
+          <div style={{ marginBottom: "12px" }}><label style={sectionLbl}>Naam (optioneel)</label><input value={docName} onChange={e => setDocName(e.target.value)} placeholder={docType} style={sectionInp} /></div>
+          <button onClick={handleAdd} disabled={saving} style={{ background: "#0284c7", border: "none", borderRadius: "8px", padding: "9px 16px", fontSize: "13px", fontWeight: "600", color: "#fff", cursor: "pointer", opacity: saving ? 0.5 : 1 }}>{saving ? "Toevoegen…" : "Toevoegen"}</button>
+        </Card>
+      )}
+      {docs.length === 0 && !showForm ? (
+        <Card style={{ textAlign: "center", padding: "40px" }}><p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>Nog geen documenten toegevoegd</p></Card>
+      ) : docs.map(doc => (
+        <Card key={doc.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+            <div>
+              <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{doc.name}</div>
+              <div style={{ fontSize: "11px", color: "#94a3b8" }}>{doc.type}</div>
+            </div>
+          </div>
+          <span style={{ fontSize: "11px", color: "#94a3b8" }}>{new Date(doc.created_at).toLocaleDateString("nl-NL")}</span>
+        </Card>
+      ))}
+    </SectionWrap>
+  );
+}
+
+// ─── Voorwaarden ──────────────────────────────────────────────────────────────
+
+const DEFAULT_VOORWAARDEN = [
+  { key: "financiering",  label: "Voorbehoud financiering",     deadline: "" },
+  { key: "bouwkundig",    label: "Voorbehoud bouwkundige keuring", deadline: "" },
+  { key: "eigendom",      label: "Eigendomsoverdracht vrij van huur", deadline: "" },
+  { key: "nvl",           label: "Niet-verborgen gebreken clausule", deadline: "" },
+];
+
+function VoorwaardenSection({ dealId }: { dealId: string }) {
+  const [items, setItems] = useState(DEFAULT_VOORWAARDEN.map(v => ({ ...v, checked: false })));
+  const [notes, setNotes] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  async function handleSave() {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  }
+
+  return (
+    <SectionWrap title="Ontbindende Voorwaarden">
+      <Card>
+        <div style={{ fontSize: "10px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "12px" }}>Standaard voorwaarden</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
+          {items.map((item, i) => (
+            <div key={item.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: item.checked ? "#f0fdf4" : "#f8fafc", border: `1px solid ${item.checked ? "#bbf7d0" : "#e8ecf0"}`, borderRadius: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => setItems(prev => prev.map((p, j) => j === i ? { ...p, checked: !p.checked } : p))}>
+                <input type="checkbox" checked={item.checked} onChange={() => {}} style={{ width: "15px", height: "15px", accentColor: "#0284c7", cursor: "pointer" }} />
+                <span style={{ fontSize: "13px", color: item.checked ? "#16a34a" : "#0f172a", fontWeight: "500", textDecoration: item.checked ? "line-through" : "none" }}>{item.label}</span>
+              </div>
+              <input type="date" value={item.deadline} onChange={e => setItems(prev => prev.map((p, j) => j === i ? { ...p, deadline: e.target.value } : p))} style={{ ...sectionInp, width: "140px", fontSize: "11px", padding: "5px 8px" }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ marginBottom: "12px" }}>
+          <label style={sectionLbl}>Aanvullende opmerkingen</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Bijzondere voorwaarden of afspraken..." rows={3} style={{ ...sectionInp, resize: "vertical", lineHeight: "1.5" }} />
+        </div>
+        <button onClick={handleSave} style={{ background: "#0284c7", border: "none", borderRadius: "8px", padding: "9px 16px", fontSize: "13px", fontWeight: "600", color: "#fff", cursor: "pointer" }}>
+          {saved ? "Opgeslagen ✓" : "Opslaan"}
+        </button>
+      </Card>
+    </SectionWrap>
+  );
+}
+
+// ─── Gesprekken ───────────────────────────────────────────────────────────────
+
+interface Note {
+  id: string;
+  created_at: string;
+  content: string;
+  trigger_event: string | null;
+}
+
+function GesprekkenSection({ dealId }: { dealId: string }) {
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    const supabase = createClient();
+    const { data } = await supabase.from("messages").select("id,created_at,content,trigger_event").eq("deal_id", dealId).eq("channel", "gesprek").order("created_at", { ascending: false });
+    setNotes(data ?? []);
+  }, [dealId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleAdd() {
+    if (!text.trim()) return;
+    setSaving(true);
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSaving(false); return; }
+    await supabase.from("messages").insert({ owner_id: user.id, deal_id: dealId, channel: "gesprek", content: text, status: "verzonden", trigger_event: "Notitie" });
+    setText(""); await load(); setSaving(false);
+  }
+
+  return (
+    <SectionWrap title="Gesprekken & Notities">
+      <Card>
+        <label style={sectionLbl}>Nieuwe notitie</label>
+        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Sla een gesprek of afspraak op..." rows={3} style={{ ...sectionInp, resize: "vertical", lineHeight: "1.5", marginBottom: "10px" }} />
+        <button onClick={handleAdd} disabled={saving || !text.trim()} style={{ background: "#0284c7", border: "none", borderRadius: "8px", padding: "9px 16px", fontSize: "13px", fontWeight: "600", color: "#fff", cursor: "pointer", opacity: saving || !text.trim() ? 0.5 : 1 }}>{saving ? "Opslaan…" : "Toevoegen"}</button>
+      </Card>
+      {notes.length === 0 ? (
+        <Card style={{ textAlign: "center", padding: "32px" }}><p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>Nog geen notities</p></Card>
+      ) : notes.map(note => (
+        <Card key={note.id} style={{ padding: "12px 16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
+            <span style={{ fontSize: "11px", fontWeight: "600", color: "#94a3b8" }}>{note.trigger_event ?? "Notitie"}</span>
+            <span style={{ fontSize: "11px", color: "#94a3b8" }}>{new Date(note.created_at).toLocaleDateString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+          </div>
+          <p style={{ fontSize: "13px", color: "#0f172a", margin: 0, lineHeight: "1.5" }}>{note.content}</p>
+        </Card>
+      ))}
+    </SectionWrap>
+  );
+}
+
+// ─── Overdracht ───────────────────────────────────────────────────────────────
+
+function OverdrachtSection({ deal, dealId }: { deal: DealWithContacts; dealId: string }) {
+  const [notary,       setNotary]       = useState(deal.notary_name ?? "");
+  const [transferDate, setTransferDate] = useState(deal.transfer_date?.slice(0, 10) ?? "");
+  const [meterElec,    setMeterElec]    = useState("");
+  const [meterGas,     setMeterGas]     = useState("");
+  const [meterWater,   setMeterWater]   = useState("");
+  const [keys,         setKeys]         = useState("");
+  const [saving,       setSaving]       = useState(false);
+  const [saved,        setSaved]        = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    const supabase = createClient();
+    await supabase.from("deals").update({ notary_name: notary || null, transfer_date: transferDate || null }).eq("id", dealId);
+    setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500);
+  }
+
+  const fields = [
+    { label: "Elektra (kWh)",  value: meterElec,  set: setMeterElec },
+    { label: "Gas (m³)",       value: meterGas,   set: setMeterGas },
+    { label: "Water (m³)",     value: meterWater,  set: setMeterWater },
+  ];
+
+  return (
+    <SectionWrap title="Overdracht">
+      <Card>
+        <div style={{ fontSize: "10px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "12px" }}>Notaris & Datum</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "16px" }}>
+          <div><label style={sectionLbl}>Notaris</label><input value={notary} onChange={e => setNotary(e.target.value)} placeholder="Notariskantoor..." style={sectionInp} /></div>
+          <div><label style={sectionLbl}>Overdrachtsdatum</label><input type="date" value={transferDate} onChange={e => setTransferDate(e.target.value)} style={sectionInp} /></div>
+        </div>
+        <div style={{ fontSize: "10px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "12px" }}>Meterstanden bij overdracht</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "16px" }}>
+          {fields.map(f => <div key={f.label}><label style={sectionLbl}>{f.label}</label><input type="number" value={f.value} onChange={e => f.set(e.target.value)} placeholder="0" style={sectionInp} /></div>)}
+        </div>
+        <div style={{ marginBottom: "16px" }}>
+          <label style={sectionLbl}>Sleuteloverdracht — opmerkingen</label>
+          <textarea value={keys} onChange={e => setKeys(e.target.value)} placeholder="Aantal sleutels, afspraken over overdracht..." rows={2} style={{ ...sectionInp, resize: "vertical", lineHeight: "1.5" }} />
+        </div>
+        <button onClick={handleSave} disabled={saving} style={{ background: "#0284c7", border: "none", borderRadius: "8px", padding: "9px 16px", fontSize: "13px", fontWeight: "600", color: "#fff", cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+          {saved ? "Opgeslagen ✓" : saving ? "Opslaan…" : "Opslaan"}
+        </button>
+      </Card>
+      {deal.transfer_date && (
+        <Card style={{ background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+          <div style={{ fontSize: "13px", color: "#16a34a", fontWeight: "500" }}>
+            ✓ Overdrachtsdatum ingesteld op {new Date(deal.transfer_date).toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          </div>
+        </Card>
+      )}
+    </SectionWrap>
+  );
+}
+
+// ─── End section components ───────────────────────────────────────────────────
+
 function formatEuro(v: number) {
   return "€ " + v.toLocaleString("nl-NL");
 }
@@ -1024,27 +1392,14 @@ export default function DealDetailPage() {
             </div>
           )}
 
-          {activeNav === "wwft" && (
-            <WwftSection deal={deal} dealId={dealId} />
-          )}
-
-          {activeNav === "whatsapp" && (
-            <WhatsAppSection deal={deal} dealId={dealId} />
-          )}
-
-          {activeNav !== "overzicht" && activeNav !== "wwft" && activeNav !== "whatsapp" && (
-            <div style={{ padding: "40px 24px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%" }}>
-              <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "40px 32px", textAlign: "center", maxWidth: "360px", width: "100%" }}>
-                <div style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>
-                  {SUB_NAV.find((n) => n.id === activeNav)?.label} — komt binnenkort
-                </div>
-                <p style={{ fontSize: "13px", color: "#94a3b8", margin: "0 0 20px" }}>Deze module is nog in ontwikkeling.</p>
-                <button style={{ padding: "8px 16px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
-                  + Toevoegen
-                </button>
-              </div>
-            </div>
-          )}
+          {activeNav === "bezichtigingen" && <BezichtigingenSection dealId={dealId} />}
+          {activeNav === "verkoper" && <VerkoperSection deal={deal} />}
+          {activeNav === "documenten" && <DocumentenSection dealId={dealId} />}
+          {activeNav === "voorwaarden" && <VoorwaardenSection dealId={dealId} />}
+          {activeNav === "wwft" && <WwftSection deal={deal} dealId={dealId} />}
+          {activeNav === "whatsapp" && <WhatsAppSection deal={deal} dealId={dealId} />}
+          {activeNav === "gesprekken" && <GesprekkenSection dealId={dealId} />}
+          {activeNav === "overdracht" && <OverdrachtSection deal={deal} dealId={dealId} />}
         </div>
       </div>
     </div>
