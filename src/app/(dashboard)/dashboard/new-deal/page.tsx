@@ -444,7 +444,6 @@ export default function NewDealPage() {
 
     const { error: e3 } = await supabase.from("deals").insert({
       owner_id: user.id,
-      agent_id: user.id,
       title: `${property.address}, ${property.city}`,
       company: seller.name,
       stage: dealData.stage,

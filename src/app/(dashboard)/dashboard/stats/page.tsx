@@ -53,9 +53,12 @@ export default function StatsPage() {
   useEffect(() => {
     async function load() {
       const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
       const { data } = await supabase
         .from("deals")
-        .select("id, address, title, stage, agreed_price, value, created_at, updated_at");
+        .select("id, address, title, stage, agreed_price, value, created_at, updated_at")
+        .eq("owner_id", user.id);
       setDeals((data ?? []) as Deal[]);
       setLoading(false);
     }

@@ -40,9 +40,12 @@ export default function RelatiesPage() {
 
   const load = useCallback(async () => {
     const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoading(false); return; }
     const { data: deals } = await supabase
       .from("deals")
       .select("id, address, title, created_at, updated_at, buyer_id")
+      .eq("owner_id", user.id)
       .eq("stage", "gesloten")
       .not("buyer_id", "is", null);
 

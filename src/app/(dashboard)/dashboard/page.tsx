@@ -11,7 +11,7 @@ export default async function DashboardPage() {
   const { data: deals } = await supabase
     .from("deals")
     .select("*")
-    .eq("agent_id", user.id)
+    .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
 
   return <PipelinePage deals={(deals ?? []) as DealWithContacts[]} />;
