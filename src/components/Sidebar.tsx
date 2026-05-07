@@ -77,9 +77,7 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
       {/* Logo */}
       <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #f1f5f9" }}>
         <Link href="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }}>
-          <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "linear-gradient(135deg, #0ea5e9, #0284c7)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: "700", fontSize: "15px", flexShrink: 0 }}>
-            T
-          </div>
+          <img src="/logo.png" alt="Transactly" style={{ width: "32px", height: "32px", objectFit: "contain", cursor: "pointer", flexShrink: 0 }} />
           <div>
             <div style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a", lineHeight: 1.2 }}>Transactly</div>
             <div style={{ fontSize: "11px", color: "#94a3b8", lineHeight: 1.2 }}>Makelaarsplatform</div>
