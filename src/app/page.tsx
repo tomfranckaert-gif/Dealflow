@@ -74,6 +74,72 @@ export default function Home() {
         </p>
       </section>
 
+      {/* POSITIONING BANNER */}
+      <section style={{ padding: "32px 40px", background: "#0f172a" }}>
+        <div style={{ maxWidth: "680px", margin: "0 auto", textAlign: "center" }}>
+          <div style={{
+            fontSize: "10px", color: "#94a3b8", letterSpacing: "2px",
+            textTransform: "uppercase", marginBottom: "12px",
+          }}>
+            Belangrijk om te weten
+          </div>
+          <h2 style={{ fontSize: "24px", fontWeight: "700", color: "#fff", margin: "0 0 12px" }}>
+            Transactly vervangt Realworks niet
+          </h2>
+          <p style={{ fontSize: "15px", color: "#94a3b8", lineHeight: 1.7, margin: 0 }}>
+            Transactly is een automatiseringslaag bovenop Realworks. Je blijft gewoon werken
+            in Realworks — Transactly zorgt voor alles wat er tussendoor gebeurt. WhatsApp follow-ups,
+            Wwft risicoanalyse, voorwaarden bewaken en de overdracht afhandelen.
+          </p>
+
+          <div style={{
+            display: "grid", gridTemplateColumns: "1fr 1fr",
+            gap: "16px", maxWidth: "560px", margin: "24px auto 0",
+            textAlign: "left",
+          }}>
+            {/* LEFT */}
+            <div style={{ background: "#1e293b", borderRadius: "10px", padding: "16px" }}>
+              <div style={{
+                fontSize: "10px", color: "#64748b", textTransform: "uppercase",
+                letterSpacing: "1px", marginBottom: "10px",
+              }}>Realworks doet</div>
+              {[
+                "CRM en contactbeheer",
+                "Publiceren op Funda",
+                "Koopovereenkomst opstellen",
+                "Move.nl client portal",
+                "Biedlogboek",
+              ].map((item) => (
+                <div key={item} style={{ fontSize: "13px", color: "#cbd5e1", marginBottom: "6px" }}>
+                  <span style={{ color: "#10b981", marginRight: "8px" }}>✓</span>{item}
+                </div>
+              ))}
+            </div>
+
+            {/* RIGHT */}
+            <div style={{ background: "#1e3a5f", border: "1px solid #0284c7", borderRadius: "10px", padding: "16px" }}>
+              <div style={{
+                fontSize: "10px", color: "#0284c7", textTransform: "uppercase",
+                letterSpacing: "1px", marginBottom: "10px",
+              }}>Transactly voegt toe</div>
+              {[
+                "WhatsApp automation",
+                "Wwft risicobeoordeling",
+                "Voorwaarden tracker",
+                "Bezichtigingen + feedback",
+                "Overdracht checklist",
+                "AI document follow-up",
+                "Verkoper weekrapport",
+              ].map((item) => (
+                <div key={item} style={{ fontSize: "13px", color: "#cbd5e1", marginBottom: "6px" }}>
+                  <span style={{ color: "#0284c7", marginRight: "8px" }}>✓</span>{item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* FEATURES */}
       <section style={{ padding: "60px 40px", background: "#f8fafc" }}>
         <h2 style={{
