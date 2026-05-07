@@ -103,7 +103,7 @@ export default function OnboardingPage() {
 
         {/* Logo */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", marginBottom: "32px" }}>
-          <img src="/logo.png" alt="Transactly" style={{ width: "48px", height: "48px", objectFit: "contain", margin: "0 auto 8px", display: "block" }} />
+          <img src="/logo.png" alt="Transactly" style={{ width: "56px", height: "56px", objectFit: "contain", display: "block", margin: "0 auto 16px" }} />
           <span style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a", letterSpacing: "-0.2px" }}>Transactly</span>
         </div>
 

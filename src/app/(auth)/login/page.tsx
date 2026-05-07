@@ -31,7 +31,7 @@ export default function LoginPage() {
       <div style={{ width: "100%", maxWidth: "380px" }}>
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: "32px" }}>
-          <img src="/logo.png" alt="Transactly" style={{ width: "48px", height: "48px", objectFit: "contain", margin: "0 auto 8px", display: "block" }} />
+          <img src="/logo.png" alt="Transactly" style={{ width: "56px", height: "56px", objectFit: "contain", display: "block", margin: "0 auto 16px" }} />
           <h1 style={{ fontSize: "20px", fontWeight: "700", color: "#0f172a", letterSpacing: "-0.5px", margin: "0 0 4px" }}>Welkom terug</h1>
           <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>Log in op je Transactly account</p>
         </div>
