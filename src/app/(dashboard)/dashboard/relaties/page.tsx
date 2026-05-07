@@ -55,8 +55,7 @@ export default function RelatiesPage() {
     const { data: contacts } = await supabase
       .from("contacts")
       .select("id, name, phone, email")
-      .in("id", buyerIds)
-      .eq("type", "buyer");
+      .in("id", buyerIds);
 
     if (!contacts) { setLoading(false); return; }
 

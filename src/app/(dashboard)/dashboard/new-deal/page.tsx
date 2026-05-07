@@ -433,37 +433,34 @@ export default function NewDealPage() {
     if (!user) { router.push("/login"); return; }
 
     const { data: sellerContact, error: e1 } = await supabase.from("contacts")
-      .insert({ owner_id: user.id, name: seller.name, email: seller.email || null, phone: seller.phone || null, type: "seller" })
+      .insert({ owner_id: user.id, name: seller.name, email: seller.email || null, phone: seller.phone || null })
       .select().single();
-    if (e1) { setError(e1.message); setSubmitting(false); return; }
+    if (e1) { setError(`Contact (verkoper): ${e1.message}`); setSubmitting(false); return; }
 
     const { data: buyerContact, error: e2 } = await supabase.from("contacts")
-      .insert({ owner_id: user.id, name: buyer.name, email: buyer.email || null, phone: buyer.phone || null, type: "buyer" })
+      .insert({ owner_id: user.id, name: buyer.name, email: buyer.email || null, phone: buyer.phone || null })
       .select().single();
-    if (e2) { setError(e2.message); setSubmitting(false); return; }
+    if (e2) { setError(`Contact (koper): ${e2.message}`); setSubmitting(false); return; }
 
     const { error: e3 } = await supabase.from("deals").insert({
       owner_id: user.id,
       title: `${property.address}, ${property.city}`,
-      company: seller.name,
       stage: dealData.stage,
       address: property.address,
-      postcode: property.postcode,
       city: property.city,
+      postcode: property.postcode,
       property_type: property.type,
       surface: property.surface,
       rooms: property.rooms,
       asking_price: property.asking_price,
       agreed_price: dealData.agreed_price ? parseFloat(dealData.agreed_price) : null,
-      value: dealData.agreed_price ? parseFloat(dealData.agreed_price) : null,
       transfer_date: dealData.transfer_date || null,
       notary_name: dealData.notary || null,
       seller_id: sellerContact.id,
       buyer_id: buyerContact.id,
-      contact_name: seller.name,
-      contact_email: seller.email || null,
+      contact_name: buyer.name,
     });
-    if (e3) { setError(e3.message); setSubmitting(false); return; }
+    if (e3) { setError(`Deal: ${e3.message}`); setSubmitting(false); return; }
     const agentName = user.email?.split("@")[0] ?? "Makelaar";
     const address = `${property.address}, ${property.city}`;
     fetch("/api/send-email", {
