@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
-export default function Home() {
+export default function LandingPage() {
   return (
     <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", color: "#0f172a" }}>
 
@@ -123,9 +123,7 @@ export default function Home() {
           {/* STARTER */}
           <div style={{ border: "1px solid #e8ecf0", borderRadius: "14px", padding: "28px 24px" }}>
             <div style={{ fontSize: "13px", fontWeight: "600", color: "#64748b", marginBottom: "8px" }}>STARTER</div>
-            <div style={{ fontSize: "30px", fontWeight: "800", color: "#0f172a" }}>
-              €199<span style={{ fontSize: "14px", fontWeight: "400", color: "#94a3b8" }}>/mnd</span>
-            </div>
+            <div style={{ fontSize: "30px", fontWeight: "800", color: "#0f172a" }}>€199<span style={{ fontSize: "14px", fontWeight: "400", color: "#94a3b8" }}>/mnd</span></div>
             <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px", marginBottom: "20px" }}>1 gebruiker · Tot 10 deals</div>
             <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", fontSize: "13px", color: "#64748b", lineHeight: 2 }}>
               {["Pipeline", "Documenten", "Wwft", "WhatsApp"].map((f) => (
@@ -150,9 +148,7 @@ export default function Home() {
               padding: "4px 12px", borderRadius: "999px",
             }}>Meest gekozen</div>
             <div style={{ fontSize: "13px", fontWeight: "600", color: "#0284c7", marginBottom: "8px" }}>PRO</div>
-            <div style={{ fontSize: "30px", fontWeight: "800", color: "#0f172a" }}>
-              €399<span style={{ fontSize: "14px", fontWeight: "400", color: "#94a3b8" }}>/mnd</span>
-            </div>
+            <div style={{ fontSize: "30px", fontWeight: "800", color: "#0f172a" }}>€399<span style={{ fontSize: "14px", fontWeight: "400", color: "#94a3b8" }}>/mnd</span></div>
             <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px", marginBottom: "20px" }}>1 gebruiker · Onbeperkte deals</div>
             <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", fontSize: "13px", color: "#64748b", lineHeight: 2 }}>
               {["Pipeline", "Documenten", "Wwft", "WhatsApp", "Bezichtigingen", "Overdracht"].map((f) => (
@@ -169,9 +165,7 @@ export default function Home() {
           {/* OFFICE */}
           <div style={{ border: "1px solid #e8ecf0", borderRadius: "14px", padding: "28px 24px" }}>
             <div style={{ fontSize: "13px", fontWeight: "600", color: "#64748b", marginBottom: "8px" }}>OFFICE</div>
-            <div style={{ fontSize: "30px", fontWeight: "800", color: "#0f172a" }}>
-              €799<span style={{ fontSize: "14px", fontWeight: "400", color: "#94a3b8" }}>/mnd</span>
-            </div>
+            <div style={{ fontSize: "30px", fontWeight: "800", color: "#0f172a" }}>€799<span style={{ fontSize: "14px", fontWeight: "400", color: "#94a3b8" }}>/mnd</span></div>
             <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "4px", marginBottom: "20px" }}>Tot 5 gebruikers · Onbeperkte deals</div>
             <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", fontSize: "13px", color: "#64748b", lineHeight: 2 }}>
               {["Pipeline", "Documenten", "Wwft", "WhatsApp", "Bezichtigingen", "Overdracht", "Team management"].map((f) => (
