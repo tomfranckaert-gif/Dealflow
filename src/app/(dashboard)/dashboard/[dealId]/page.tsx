@@ -632,6 +632,124 @@ function WhatsAppSection({ deal, dealId }: { deal: DealWithContacts; dealId: str
   );
 }
 
+type DocStatus = "wacht_op_ondertekening" | "ondertekend" | "ontvangen" | "ontbreekt";
+type DocSource = "Realworks" | "Handmatig";
+
+interface DocItem {
+  name: string;
+  source: DocSource;
+  status: DocStatus;
+  date?: string;
+}
+
+const HARDCODED_DOCS: DocItem[] = [
+  { name: "Koopovereenkomst",              source: "Realworks", status: "wacht_op_ondertekening", date: "2026-05-01" },
+  { name: "Lijst van Zaken",               source: "Realworks", status: "ondertekend",            date: "2026-04-28" },
+  { name: "Financieringsvoorbehoud waiver", source: "Handmatig", status: "ontvangen",              date: "2026-04-30" },
+  { name: "Energielabel",                  source: "Realworks", status: "ontbreekt" },
+  { name: "VvE dossier",                   source: "Handmatig", status: "ontbreekt" },
+];
+
+const DOC_STATUS: Record<DocStatus, { bg: string; color: string; label: string }> = {
+  wacht_op_ondertekening: { bg: "#fff7ed", color: "#c2410c", label: "Wacht op ondertekening" },
+  ondertekend:            { bg: "#f0fdf4", color: "#15803d", label: "Ondertekend" },
+  ontvangen:              { bg: "#eff6ff", color: "#1d4ed8", label: "Ontvangen" },
+  ontbreekt:              { bg: "#fef2f2", color: "#b91c1c", label: "Ontbreekt" },
+};
+
+function DocumentenSection() {
+  const docs = HARDCODED_DOCS;
+  const complete = docs.filter((d) => d.status === "ondertekend" || d.status === "ontvangen").length;
+  const pct = Math.round((complete / docs.length) * 100);
+
+  return (
+    <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "14px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>
+          Documenten
+        </span>
+        <button style={{ padding: "6px 12px", background: "transparent", border: "1px solid #cbd5e1", borderRadius: "8px", color: "#0f172a", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
+          + Document toevoegen
+        </button>
+      </div>
+
+      {/* Summary bar */}
+      <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+          <span style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a" }}>
+            {complete} van {docs.length} documenten compleet
+          </span>
+          <span style={{ fontSize: "11px", fontWeight: "600", color: "#0284c7" }}>{pct}%</span>
+        </div>
+        <div style={{ height: "6px", background: "#e8ecf0", borderRadius: "999px", overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${pct}%`, background: "#0284c7", borderRadius: "999px", transition: "width 0.3s ease" }} />
+        </div>
+      </div>
+
+      {/* Document cards */}
+      {docs.length === 0 ? (
+        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "40px 32px", textAlign: "center" }}>
+          <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>Geen documenten</div>
+          <p style={{ fontSize: "12px", color: "#94a3b8", margin: 0 }}>Documenten worden aangemaakt in Realworks en verschijnen hier automatisch.</p>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {docs.map((doc) => {
+            const badge = DOC_STATUS[doc.status];
+            return (
+              <div key={doc.name} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px 16px", display: "flex", alignItems: "center", gap: "12px" }}>
+                {/* Icon */}
+                <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14,2 14,8 20,8" />
+                  </svg>
+                </div>
+
+                {/* Name + meta */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {doc.name}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    {/* Source pill */}
+                    <span style={{
+                      fontSize: "10px", fontWeight: "600", padding: "2px 7px", borderRadius: "999px",
+                      background: doc.source === "Realworks" ? "#f0fdf4" : "#eff6ff",
+                      color: doc.source === "Realworks" ? "#15803d" : "#1d4ed8",
+                      border: `1px solid ${doc.source === "Realworks" ? "#bbf7d0" : "#bfdbfe"}`,
+                    }}>
+                      {doc.source}
+                    </span>
+                    {/* Status badge */}
+                    <span style={{ fontSize: "10px", fontWeight: "600", padding: "2px 7px", borderRadius: "999px", background: badge.bg, color: badge.color }}>
+                      {badge.label}
+                    </span>
+                    {/* Date */}
+                    {doc.date && (
+                      <span style={{ fontSize: "10px", color: "#94a3b8" }}>
+                        {new Date(doc.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Upload button if missing */}
+                {doc.status === "ontbreekt" && (
+                  <button style={{ padding: "6px 12px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "12px", fontWeight: "600", cursor: "pointer", flexShrink: 0 }}>
+                    Uploaden
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatEuro(v: number) {
   return "€ " + v.toLocaleString("nl-NL");
 }
@@ -870,6 +988,10 @@ export default function DealDetailPage() {
             </div>
           )}
 
+          {activeNav === "documenten" && (
+            <DocumentenSection />
+          )}
+
           {activeNav === "wwft" && (
             <WwftSection deal={deal} dealId={dealId} />
           )}
@@ -878,7 +1000,7 @@ export default function DealDetailPage() {
             <WhatsAppSection deal={deal} dealId={dealId} />
           )}
 
-          {activeNav !== "overzicht" && activeNav !== "wwft" && activeNav !== "whatsapp" && (
+          {activeNav !== "overzicht" && activeNav !== "documenten" && activeNav !== "wwft" && activeNav !== "whatsapp" && (
             <div style={{ padding: "40px 24px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%" }}>
               <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "40px 32px", textAlign: "center", maxWidth: "360px", width: "100%" }}>
                 <div style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>
