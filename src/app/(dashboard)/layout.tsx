@@ -7,6 +7,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { data: agent } = await supabase
+    .from("agents")
+    .select("office_name")
+    .eq("id", user.id)
+    .single();
+
+  if (!agent?.office_name) redirect("/onboarding");
+
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f8fafc" }}>
       <Sidebar userEmail={user.email ?? ""} />
