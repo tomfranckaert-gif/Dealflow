@@ -27,12 +27,16 @@ const STAGE_BADGE: Record<DealStage, { bg: string; text: string; dot: string }> 
   gesloten:     { bg: "#f1f5f9", text: "#374151", dot: "#6b7280" },
 };
 
-type SubNav = "overzicht" | "documenten" | "voorwaarden" | "wwft" | "whatsapp" | "gesprekken" | "overdracht";
+type SubNav = "overzicht" | "verkoper" | "documenten" | "voorwaarden" | "wwft" | "whatsapp" | "gesprekken" | "overdracht";
 
 const SUB_NAV: { id: SubNav; label: string; icon: React.ReactNode }[] = [
   {
     id: "overzicht", label: "Overzicht",
     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>,
+  },
+  {
+    id: "verkoper", label: "Verkoper",
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9,22 9,12 15,12 15,22" /></svg>,
   },
   {
     id: "documenten", label: "Documenten",
@@ -1126,6 +1130,221 @@ function daysSince(d: string) {
   return Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
 }
 
+const FUNDA_WEEKS = ["W1", "W2", "W3", "W4", "W5", "W6"];
+const FUNDA_DATA  = [380, 520, 290, 410, 480, 847];
+
+const NEXT_STEPS = [
+  { label: "Bod van koper bespreken",          deadline: "Vandaag",      bg: "#fee2e2", color: "#b91c1c" },
+  { label: "Koopakte opstellen na akkoord",    deadline: "Deze week",    bg: "#fff7ed", color: "#c2410c" },
+  { label: "Notariële overdracht plannen",     deadline: "18 december",  bg: "#f1f5f9", color: "#475569" },
+  { label: "Weekrapport versturen",            deadline: "Maandag",      bg: "#eff6ff", color: "#1d4ed8" },
+];
+
+function VerkoperSection({ deal, dealId }: { deal: DealWithContacts; dealId: string }) {
+  const supabase = createClient();
+  const [feedbackText, setFeedbackText] = useState("");
+  const [loadingFeedback, setLoadingFeedback] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [reportText, setReportText] = useState("");
+  const [generatingReport, setGeneratingReport] = useState(false);
+  const [savingReport, setSavingReport] = useState(false);
+  const [reportSaved, setReportSaved] = useState(false);
+
+  const dagen = daysSince(deal.created_at);
+  const maxVal = Math.max(...FUNDA_DATA);
+  const CHART_H = 100;
+
+  useEffect(() => {
+    setLoadingFeedback(true);
+    fetch("/api/generate-message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "seller-feedback",
+        dealAddress: deal.address ?? "",
+        stats: "8 bezichtigingen, gem. 3.8/5, 1 bod ontvangen",
+      }),
+    })
+      .then((r) => r.json())
+      .then(({ message }) => setFeedbackText(message))
+      .finally(() => setLoadingFeedback(false));
+  }, [deal.address]);
+
+  async function handleWeekrapport() {
+    setGeneratingReport(true);
+    setShowModal(true);
+    setReportText("");
+    const sellerName = deal.seller?.name ?? "verkoper";
+    const res = await fetch("/api/generate-message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "weekrapport",
+        dealAddress: deal.address ?? "",
+        dealCity: deal.city ?? "",
+        sellerName,
+        stats: "1.247 Funda views (+12%), 8 bezichtigingen, 1 bod ontvangen",
+      }),
+    });
+    const { message } = await res.json();
+    setReportText(message);
+    setGeneratingReport(false);
+  }
+
+  async function handleSendReport() {
+    if (!reportText.trim()) return;
+    setSavingReport(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from("messages").insert({
+        owner_id: user.id,
+        deal_id: dealId,
+        contact_id: deal.seller_id ?? null,
+        channel: "whatsapp",
+        content: reportText,
+        status: "concept",
+        trigger_event: "Weekrapport verkoper",
+        scheduled_at: null,
+      });
+    }
+    setSavingReport(false);
+    setReportSaved(true);
+    setTimeout(() => { setReportSaved(false); setShowModal(false); }, 1800);
+  }
+
+  return (
+    <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "14px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>
+          Verkoper dashboard
+        </span>
+        <button
+          onClick={handleWeekrapport}
+          style={{ padding: "6px 14px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
+        >
+          Weekrapport versturen
+        </button>
+      </div>
+
+      {/* Stats row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "10px" }}>
+        {[
+          { label: "Funda Views",      value: "1.247",        sub: "+12% deze week",           subColor: "#16a34a" },
+          { label: "Bezichtigingen",   value: "8",            sub: "2 nieuw",                  subColor: "#0284c7" },
+          { label: "Dagen te koop",    value: String(dagen),  sub: "Vanaf aanmaakdatum",       subColor: "#94a3b8" },
+          { label: "Boden",            value: "1",            sub: "Actief in onderhandeling", subColor: "#c2410c" },
+        ].map((s) => (
+          <div key={s.label} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "10px", padding: "14px" }}>
+            <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.7px", marginBottom: "6px" }}>{s.label}</div>
+            <div style={{ fontSize: "20px", fontWeight: "700", color: "#0f172a", letterSpacing: "-0.5px", marginBottom: "4px" }}>{s.value}</div>
+            <div style={{ fontSize: "10px", fontWeight: "600", color: s.subColor }}>{s.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Funda bar chart */}
+      <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px" }}>
+        <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "16px" }}>
+          Funda views — afgelopen 6 weken
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", height: `${CHART_H + 20}px` }}>
+          {FUNDA_DATA.map((v, i) => {
+            const barH = Math.round((v / maxVal) * CHART_H);
+            const isLast = i === FUNDA_DATA.length - 1;
+            return (
+              <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                <span style={{ fontSize: "10px", fontWeight: "600", color: isLast ? "#0284c7" : "#64748b" }}>{v}</span>
+                <div style={{ width: "100%", height: `${barH}px`, background: isLast ? "#0284c7" : "#bfdbfe", borderRadius: "4px 4px 0 0" }} />
+                <span style={{ fontSize: "10px", color: "#94a3b8" }}>{FUNDA_WEEKS[i]}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* AI feedback summary */}
+      <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px" }}>
+        <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "12px" }}>
+          Bezichtigingen feedback — AI samenvatting
+        </div>
+        {loadingFeedback ? (
+          <div style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>AI samenvatting wordt gegenereerd…</div>
+        ) : feedbackText ? (
+          <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "14px", fontSize: "13px", color: "#374151", fontStyle: "italic", lineHeight: "1.6" }}>
+            {feedbackText}
+          </div>
+        ) : (
+          <div style={{ fontSize: "12px", color: "#94a3b8" }}>Geen samenvatting beschikbaar.</div>
+        )}
+      </div>
+
+      {/* Volgende stappen */}
+      <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px" }}>
+        <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "12px" }}>
+          Volgende stappen voor verkoper
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {NEXT_STEPS.map((step) => (
+            <div key={step.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: "#f8fafc", borderRadius: "8px" }}>
+              <span style={{ fontSize: "13px", color: "#0f172a", fontWeight: "500" }}>{step.label}</span>
+              <span style={{ fontSize: "10px", fontWeight: "700", padding: "3px 8px", borderRadius: "999px", background: step.bg, color: step.color, flexShrink: 0, marginLeft: "12px" }}>
+                {step.deadline}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Weekrapport modal */}
+      {showModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+          <div style={{ background: "#fff", borderRadius: "16px", width: "100%", maxWidth: "560px", padding: "24px", display: "flex", flexDirection: "column", gap: "14px", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>Weekrapport verkoper</span>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: "18px", lineHeight: 1, padding: "2px 6px" }}
+              >
+                ×
+              </button>
+            </div>
+
+            {generatingReport ? (
+              <div style={{ padding: "32px", textAlign: "center", fontSize: "13px", color: "#94a3b8", fontStyle: "italic" }}>
+                Weekrapport wordt gegenereerd…
+              </div>
+            ) : (
+              <textarea
+                value={reportText}
+                onChange={(e) => setReportText(e.target.value)}
+                rows={14}
+                style={{ width: "100%", padding: "12px", border: "1px solid #e8ecf0", borderRadius: "8px", fontSize: "12px", color: "#0f172a", lineHeight: "1.6", resize: "vertical", boxSizing: "border-box", fontFamily: "DM Sans, Helvetica Neue, sans-serif" }}
+              />
+            )}
+
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{ padding: "8px 16px", background: "transparent", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: "600", color: "#64748b", cursor: "pointer" }}
+              >
+                Sluiten
+              </button>
+              <button
+                onClick={handleSendReport}
+                disabled={savingReport || generatingReport || !reportText.trim()}
+                style={{ padding: "8px 16px", background: reportSaved ? "#16a34a" : "#0284c7", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "600", color: "#fff", cursor: "pointer", opacity: savingReport || generatingReport || !reportText.trim() ? 0.6 : 1, transition: "background 0.2s" }}
+              >
+                {reportSaved ? "✓ Opgeslagen als concept" : savingReport ? "Opslaan…" : "Versturen via WhatsApp"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Avatar({ name, color }: { name: string; color: string }) {
   const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   return (
@@ -1351,6 +1570,10 @@ export default function DealDetailPage() {
             </div>
           )}
 
+          {activeNav === "verkoper" && (
+            <VerkoperSection deal={deal} dealId={dealId} />
+          )}
+
           {activeNav === "documenten" && (
             <DocumentenSection />
           )}
@@ -1371,7 +1594,7 @@ export default function DealDetailPage() {
             <WhatsAppSection deal={deal} dealId={dealId} />
           )}
 
-          {activeNav !== "overzicht" && activeNav !== "documenten" && activeNav !== "gesprekken" && activeNav !== "overdracht" && activeNav !== "wwft" && activeNav !== "whatsapp" && (
+          {activeNav !== "overzicht" && activeNav !== "verkoper" && activeNav !== "documenten" && activeNav !== "gesprekken" && activeNav !== "overdracht" && activeNav !== "wwft" && activeNav !== "whatsapp" && (
             <div style={{ padding: "40px 24px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%" }}>
               <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "40px 32px", textAlign: "center", maxWidth: "360px", width: "100%" }}>
                 <div style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>
