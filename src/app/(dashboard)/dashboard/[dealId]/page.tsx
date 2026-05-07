@@ -1014,6 +1014,11 @@ function formatEuro(v: number) {
 
 function formatDate(d: string | null) {
   if (!d) return "Nog niet ingesteld";
+  const parts = d.slice(0, 10).split("-");
+  if (parts.length === 3) {
+    const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    return date.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
+  }
   return new Date(d).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
 }
 
@@ -1184,10 +1189,10 @@ export default function DealDetailPage() {
   const progress = stageProgress[currentStage] ?? 0;
 
   const ACTIONS = [
-    { label: "Document genereren",    color: "#0284c7", bg: "#f0f9ff", border: "rgba(2,132,199,0.2)" },
-    { label: "WhatsApp sturen",        color: "#16a34a", bg: "#f0fdf4", border: "rgba(22,163,74,0.2)" },
-    { label: "Kadaster check",         color: "#7c3aed", bg: "#f5f3ff", border: "rgba(124,58,237,0.2)" },
-    { label: "Voorwaarden toevoegen",  color: "#ef4444", bg: "#fff1f2", border: "rgba(239,68,68,0.2)" },
+    { label: "Document genereren",    color: "#0284c7", bg: "#f0f9ff", border: "rgba(2,132,199,0.2)", onClick: () => setActiveNav("documenten") },
+    { label: "WhatsApp sturen",        color: "#16a34a", bg: "#f0fdf4", border: "rgba(22,163,74,0.2)", onClick: () => setActiveNav("whatsapp") },
+    { label: "Kadaster check",         color: "#7c3aed", bg: "#f5f3ff", border: "rgba(124,58,237,0.2)", onClick: () => alert("Kadaster check — komt binnenkort. Verbinding via Kadaster API wordt toegevoegd in de volgende versie.") },
+    { label: "Voorwaarden toevoegen",  color: "#ef4444", bg: "#fff1f2", border: "rgba(239,68,68,0.2)", onClick: () => setActiveNav("voorwaarden") },
   ];
 
   return (
@@ -1383,7 +1388,7 @@ export default function DealDetailPage() {
                 <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "12px" }}>Snelle acties</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                   {ACTIONS.map((a) => (
-                    <button key={a.label} style={{ padding: "10px 12px", background: a.bg, border: `1px solid ${a.border}`, borderRadius: "8px", color: a.color, fontSize: "12px", fontWeight: "600", cursor: "pointer", textAlign: "left" }}>
+                    <button key={a.label} onClick={a.onClick} style={{ padding: "10px 12px", background: a.bg, border: `1px solid ${a.border}`, borderRadius: "8px", color: a.color, fontSize: "12px", fontWeight: "600", cursor: "pointer", textAlign: "left" }}>
                       {a.label}
                     </button>
                   ))}
