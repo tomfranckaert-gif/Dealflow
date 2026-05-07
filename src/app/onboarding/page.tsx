@@ -77,7 +77,7 @@ export default function OnboardingPage() {
   async function handleStep1() {
     if (!name.trim() || !officeName.trim()) return;
     setSaving(true);
-    await supabase.from("agents").update({ name: name.trim(), office_name: officeName.trim() }).eq("id", userId);
+    await supabase.from("agents").upsert({ id: userId, name: name.trim(), office_name: officeName.trim() });
     setSaving(false);
     setStep(2);
   }
@@ -85,10 +85,16 @@ export default function OnboardingPage() {
   async function handleConnect() {
     setSaving(true);
     if (apiKey.trim()) {
-      await supabase.from("agents").update({ realworks_api_key: apiKey.trim() }).eq("id", userId);
+      await supabase.from("agents").upsert({ id: userId, realworks_api_key: apiKey.trim() });
     }
     setSaving(false);
     setStep(3);
+  }
+
+  function handleFinish() {
+    localStorage.setItem("onboarding_complete", "true");
+    document.cookie = "onboarding_complete=true; path=/; max-age=31536000";
+    router.push("/dashboard");
   }
 
   return (
@@ -244,7 +250,7 @@ export default function OnboardingPage() {
             </div>
 
             <button
-              onClick={() => router.push("/dashboard/new-deal")}
+              onClick={handleFinish}
               style={{ width: "100%", padding: "14px", background: "#0284c7", border: "none", borderRadius: "10px", fontSize: "15px", fontWeight: "700", color: "#fff", cursor: "pointer", boxShadow: "0 4px 12px rgba(2,132,199,0.2)" }}
             >
               Eerste deal aanmaken →

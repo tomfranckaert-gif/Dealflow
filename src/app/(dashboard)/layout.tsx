@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import Sidebar from "@/components/Sidebar";
 
@@ -7,13 +8,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: agent } = await supabase
-    .from("agents")
-    .select("office_name")
-    .eq("id", user.id)
-    .single();
+  const cookieStore = await cookies();
+  const onboardingComplete = cookieStore.get("onboarding_complete")?.value === "true";
 
-  if (!agent?.office_name) redirect("/onboarding");
+  if (!onboardingComplete) {
+    const { data: agent } = await supabase
+      .from("agents")
+      .select("office_name")
+      .eq("id", user.id)
+      .single();
+
+    if (!agent?.office_name) redirect("/onboarding");
+  }
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f8fafc" }}>
