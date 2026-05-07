@@ -349,7 +349,16 @@ function Step4({ property, seller, buyer, data, onChange }: {
           <label style={labelSt}>Overeengekomen prijs</label>
           <div style={{ display: "flex" }}>
             <div style={{ background: "#f8fafc", border: "1px solid #e8ecf0", borderRight: "none", borderRadius: "8px 0 0 8px", padding: "10px 14px", fontSize: 14, color: "#64748b", fontWeight: 600 }}>€</div>
-            <FocusInput type="number" value={data.agreed_price} onChange={(e) => set("agreed_price", e.target.value)} placeholder="0" style={{ borderRadius: "0 8px 8px 0" }} />
+            <FocusInput
+              type="text"
+              value={data.agreed_price ? parseInt(data.agreed_price).toLocaleString("nl-NL") : ""}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/\./g, "").replace(/[^\d]/g, "");
+                set("agreed_price", raw);
+              }}
+              placeholder="875.000"
+              style={{ borderRadius: "0 8px 8px 0" }}
+            />
           </div>
         </div>
 
@@ -463,6 +472,7 @@ export default function NewDealPage() {
       body: JSON.stringify({ to: user.email, subject: `Nieuwe deal: ${address}`, html: newDealEmail(agentName, address) }),
     }).catch(() => {});
     router.push("/dashboard");
+    router.refresh();
   }
 
   return (

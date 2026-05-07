@@ -1066,9 +1066,11 @@ function ContactCard({ title, contact, avatarColor }: { title: string; contact: 
           </div>
         )}
       </div>
-      <button style={{ padding: "6px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "6px", color: "#16a34a", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
-        WhatsApp
-      </button>
+      {contact.phone && (
+        <button style={{ padding: "6px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "6px", color: "#16a34a", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
+          WhatsApp
+        </button>
+      )}
     </div>
   );
 }

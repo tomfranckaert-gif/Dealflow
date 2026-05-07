@@ -98,7 +98,8 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
     window.location.href = "/login";
   }
 
-  const initials = userEmail?.charAt(0).toUpperCase() ?? "U";
+  const displayEmail = userEmail || "—";
+  const initials = displayEmail.charAt(0).toUpperCase();
 
   return (
     <aside style={{ width: "220px", minWidth: "220px", background: "#ffffff", borderRight: "1px solid #e8ecf0", display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0 }}>
@@ -158,7 +159,7 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
             {initials}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{userEmail}</div>
+            <div style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayEmail}</div>
             <div style={{ fontSize: "11px", color: "#94a3b8" }}>Makelaar</div>
           </div>
           <button onClick={handleSignOut} title="Uitloggen" style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", display: "flex", padding: "2px" }}>
