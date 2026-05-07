@@ -679,20 +679,26 @@ function Card({ children, style }: { children: React.ReactNode; style?: React.CS
 
 // ─── Bezichtigingen ───────────────────────────────────────────────────────────
 
-function BezichtigingenSection({ dealId }: { dealId: string }) {
-  const [items, setItems] = useState<{ id: string; date: string; time: string; feedback: string; created_at: string }[]>([]);
+function BezichtigingenSection({ dealId, currentStage, onAdvanceStage }: { dealId: string; currentStage: DealStage; onAdvanceStage: (s: DealStage, msg: string) => Promise<void> }) {
+  const [items, setItems] = useState<{ id: string; date: string; time: string; feedback: string; rating: number | null; created_at: string }[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [rating, setRating] = useState(0);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(false);
+  const [showBodBanner, setShowBodBanner] = useState(false);
 
   const load = useCallback(async () => {
     const supabase = createClient();
     const { data } = await supabase.from("bezichtigingen").select("*").eq("deal_id", dealId).order("date", { ascending: true });
-    setItems(data ?? []);
-  }, [dealId]);
+    const loaded = data ?? [];
+    setItems(loaded);
+    if (currentStage === "bezichtiging" && loaded.some((v: { rating: number | null }) => (v.rating ?? 0) >= 4)) {
+      setShowBodBanner(true);
+    }
+  }, [dealId, currentStage]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -702,15 +708,33 @@ function BezichtigingenSection({ dealId }: { dealId: string }) {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
-    await supabase.from("bezichtigingen").insert({ owner_id: user.id, deal_id: dealId, date, time, feedback });
+    await supabase.from("bezichtigingen").insert({ owner_id: user.id, deal_id: dealId, date, time, feedback, rating: rating || null });
     await load();
-    setDate(""); setTime(""); setFeedback(""); setShowForm(false); setSaving(false);
+    setDate(""); setTime(""); setFeedback(""); setRating(0); setShowForm(false); setSaving(false);
     setToast(true); setTimeout(() => setToast(false), 2500);
+    if (currentStage === "lead") {
+      await onAdvanceStage("bezichtiging", "Fase bijgewerkt naar Bezichtiging");
+    }
+    if (rating >= 4 && currentStage === "bezichtiging") {
+      setShowBodBanner(true);
+    }
   }
 
   return (
     <SectionWrap title="Bezichtigingen">
       {toast && <div style={{ position: "fixed", bottom: "24px", right: "24px", background: "#0f172a", color: "#fff", padding: "12px 18px", borderRadius: "10px", fontSize: "13px", fontWeight: "600", zIndex: 999 }}>Opgeslagen ✓</div>}
+      {showBodBanner && (
+        <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px", padding: "14px 16px", marginBottom: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: "600", color: "#92400e", marginBottom: "2px" }}>Goede match! Bod bespreken?</div>
+            <div style={{ fontSize: "12px", color: "#b45309" }}>Een bezichtiging scoorde 4+ sterren. Wil je de fase naar Bod zetten?</div>
+          </div>
+          <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+            <button onClick={() => setShowBodBanner(false)} style={{ padding: "6px 12px", border: "1px solid #fde68a", background: "#fff", borderRadius: "6px", fontSize: "12px", color: "#92400e", cursor: "pointer" }}>Later</button>
+            <button onClick={async () => { await onAdvanceStage("bod", "Fase bijgewerkt naar Bod"); setShowBodBanner(false); }} style={{ padding: "6px 12px", background: "#f59e0b", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "#fff", cursor: "pointer" }}>Ja, zet naar Bod →</button>
+          </div>
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
         <button onClick={() => setShowForm(!showForm)} style={{ padding: "7px 14px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>+ Bezichtiging plannen</button>
       </div>
@@ -720,7 +744,15 @@ function BezichtigingenSection({ dealId }: { dealId: string }) {
             <div><label style={sectionLbl}>Datum</label><input type="date" value={date} onChange={e => setDate(e.target.value)} style={sectionInp} /></div>
             <div><label style={sectionLbl}>Tijd</label><input type="time" value={time} onChange={e => setTime(e.target.value)} style={sectionInp} /></div>
           </div>
-          <div style={{ marginBottom: "12px" }}><label style={sectionLbl}>Feedback koper</label><textarea value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Bijv. interesse, opmerkingen..." rows={3} style={{ ...sectionInp, resize: "vertical", lineHeight: "1.5" }} /></div>
+          <div style={{ marginBottom: "10px" }}><label style={sectionLbl}>Feedback koper</label><textarea value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Bijv. interesse, opmerkingen..." rows={3} style={{ ...sectionInp, resize: "vertical", lineHeight: "1.5" }} /></div>
+          <div style={{ marginBottom: "14px" }}>
+            <label style={sectionLbl}>Beoordeling</label>
+            <div style={{ display: "flex", gap: "6px" }}>
+              {[1, 2, 3, 4, 5].map(s => (
+                <button key={s} onClick={() => setRating(s === rating ? 0 : s)} style={{ width: "32px", height: "32px", borderRadius: "6px", border: "1px solid #e8ecf0", background: s <= rating ? "#fbbf24" : "#f8fafc", cursor: "pointer", fontSize: "16px", lineHeight: "1", color: s <= rating ? "#fff" : "#94a3b8" }}>★</button>
+              ))}
+            </div>
+          </div>
           <button onClick={handleSave} disabled={saving || !date} style={{ background: "#0284c7", border: "none", borderRadius: "8px", padding: "9px 16px", fontSize: "13px", fontWeight: "600", color: "#fff", cursor: "pointer", opacity: saving || !date ? 0.5 : 1 }}>{saving ? "Opslaan…" : "Opslaan"}</button>
         </Card>
       )}
@@ -735,6 +767,7 @@ function BezichtigingenSection({ dealId }: { dealId: string }) {
                 {item.time && <span style={{ fontSize: "13px", color: "#64748b", fontWeight: "400", marginLeft: "8px" }}>om {item.time}</span>}
               </div>
               {item.feedback && <div style={{ fontSize: "12px", color: "#64748b", lineHeight: "1.5" }}>{item.feedback}</div>}
+              {item.rating && <div style={{ fontSize: "13px", color: "#f59e0b", marginTop: "4px" }}>{"★".repeat(item.rating)}{"☆".repeat(5 - item.rating)}</div>}
             </div>
             <span style={{ fontSize: "10px", color: "#94a3b8", whiteSpace: "nowrap", marginLeft: "12px" }}>{new Date(item.created_at).toLocaleDateString("nl-NL")}</span>
           </div>
@@ -794,18 +827,23 @@ function VerkoperSection({ deal }: { deal: DealWithContacts }) {
 
 const DOCUMENT_TYPES = ["Koopovereenkomst", "Taxatierapport", "Energielabel", "Bouwtechnische keuring", "Eigendomsbewijs", "Hypotheekaanbod", "Overdrachtsdocument"];
 
-function DocumentenSection({ dealId }: { dealId: string }) {
-  const [docs, setDocs] = useState<{ id: string; name: string; type: string; created_at: string }[]>([]);
+function DocumentenSection({ dealId, currentStage, onAdvanceStage }: { dealId: string; currentStage: DealStage; onAdvanceStage: (s: DealStage, msg: string) => Promise<void> }) {
+  const [docs, setDocs] = useState<{ id: string; name: string; type: string; signed: boolean; created_at: string }[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [docType, setDocType] = useState(DOCUMENT_TYPES[0]);
   const [docName, setDocName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showVoorwaardenBanner, setShowVoorwaardenBanner] = useState(false);
 
   const load = useCallback(async () => {
     const supabase = createClient();
     const { data } = await supabase.from("documents").select("*").eq("deal_id", dealId).order("created_at", { ascending: false });
-    setDocs(data ?? []);
-  }, [dealId]);
+    const loaded = (data ?? []) as { id: string; name: string; type: string; signed: boolean; created_at: string }[];
+    setDocs(loaded);
+    if (currentStage === "koopakte" && loaded.some(d => d.type === "Koopovereenkomst" && d.signed)) {
+      setShowVoorwaardenBanner(true);
+    }
+  }, [dealId, currentStage]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -815,13 +853,51 @@ function DocumentenSection({ dealId }: { dealId: string }) {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
-    await supabase.from("documents").insert({ owner_id: user.id, deal_id: dealId, name, type: docType });
+    await supabase.from("documents").insert({ owner_id: user.id, deal_id: dealId, name, type: docType, signed: false });
     await load();
     setDocName(""); setShowForm(false); setSaving(false);
   }
 
+  async function handleSign(doc: { id: string; type: string }) {
+    const supabase = createClient();
+    await supabase.from("documents").update({ signed: true }).eq("id", doc.id);
+    await load();
+    if (doc.type === "Koopovereenkomst" && currentStage === "koopakte") {
+      setShowVoorwaardenBanner(true);
+    }
+  }
+
+  async function handleAdvanceToVoorwaarden() {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const DEFAULT_CONDITIONS = [
+        { label: "Voorbehoud financiering", type: "financiering" },
+        { label: "Voorbehoud bouwkundige keuring", type: "bouwkundig" },
+        { label: "Eigendomsoverdracht vrij van huur", type: "eigendom" },
+      ];
+      await Promise.all(DEFAULT_CONDITIONS.map(c =>
+        supabase.from("conditions").insert({ owner_id: user.id, deal_id: dealId, type: c.type, label: c.label, status: "open" })
+      ));
+    }
+    await onAdvanceStage("voorwaarden", "Fase bijgewerkt naar Voorwaarden — 3 standaardvoorwaarden aangemaakt");
+    setShowVoorwaardenBanner(false);
+  }
+
   return (
     <SectionWrap title="Documenten">
+      {showVoorwaardenBanner && (
+        <div style={{ background: "#faf5ff", border: "1px solid #e9d5ff", borderRadius: "10px", padding: "14px 16px", marginBottom: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: "600", color: "#7c3aed", marginBottom: "2px" }}>Koopovereenkomst ondertekend!</div>
+            <div style={{ fontSize: "12px", color: "#9333ea" }}>Ga verder naar ontbindende voorwaarden. 3 standaardvoorwaarden worden aangemaakt.</div>
+          </div>
+          <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+            <button onClick={() => setShowVoorwaardenBanner(false)} style={{ padding: "6px 12px", border: "1px solid #e9d5ff", background: "#fff", borderRadius: "6px", fontSize: "12px", color: "#7c3aed", cursor: "pointer" }}>Later</button>
+            <button onClick={handleAdvanceToVoorwaarden} style={{ padding: "6px 12px", background: "#7c3aed", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "#fff", cursor: "pointer" }}>Naar Voorwaarden →</button>
+          </div>
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
         <button onClick={() => setShowForm(!showForm)} style={{ padding: "7px 14px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>+ Document toevoegen</button>
       </div>
@@ -840,10 +916,15 @@ function DocumentenSection({ dealId }: { dealId: string }) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
             <div>
               <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{doc.name}</div>
-              <div style={{ fontSize: "11px", color: "#94a3b8" }}>{doc.type}</div>
+              <div style={{ fontSize: "11px", color: doc.signed ? "#16a34a" : "#94a3b8" }}>{doc.signed ? "✓ Ondertekend" : doc.type}</div>
             </div>
           </div>
-          <span style={{ fontSize: "11px", color: "#94a3b8" }}>{new Date(doc.created_at).toLocaleDateString("nl-NL")}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {!doc.signed && (
+              <button onClick={() => handleSign(doc)} style={{ padding: "5px 10px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "6px", color: "#16a34a", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>Ondertekend</button>
+            )}
+            <span style={{ fontSize: "11px", color: "#94a3b8" }}>{new Date(doc.created_at).toLocaleDateString("nl-NL")}</span>
+          </div>
         </Card>
       ))}
     </SectionWrap>
@@ -852,45 +933,83 @@ function DocumentenSection({ dealId }: { dealId: string }) {
 
 // ─── Voorwaarden ──────────────────────────────────────────────────────────────
 
-const DEFAULT_VOORWAARDEN = [
-  { key: "financiering",  label: "Voorbehoud financiering",     deadline: "" },
-  { key: "bouwkundig",    label: "Voorbehoud bouwkundige keuring", deadline: "" },
-  { key: "eigendom",      label: "Eigendomsoverdracht vrij van huur", deadline: "" },
-  { key: "nvl",           label: "Niet-verborgen gebreken clausule", deadline: "" },
-];
+interface Condition {
+  id: string;
+  label: string;
+  type: string;
+  deadline: string | null;
+  status: "open" | "vervallen";
+}
 
-function VoorwaardenSection({ dealId }: { dealId: string }) {
-  const [items, setItems] = useState(DEFAULT_VOORWAARDEN.map(v => ({ ...v, checked: false })));
-  const [notes, setNotes] = useState("");
-  const [saved, setSaved] = useState(false);
+function VoorwaardenSection({ dealId, currentStage, onAdvanceStage }: { dealId: string; currentStage: DealStage; onAdvanceStage: (s: DealStage, msg: string) => Promise<void> }) {
+  const [conditions, setConditions] = useState<Condition[]>([]);
+  const [loadingConds, setLoadingConds] = useState(true);
+  const [showFinancieringBanner, setShowFinancieringBanner] = useState(false);
 
-  async function handleSave() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+  const load = useCallback(async () => {
+    const supabase = createClient();
+    const { data } = await supabase.from("conditions").select("*").eq("deal_id", dealId).order("created_at", { ascending: true });
+    const loaded = (data ?? []) as Condition[];
+    setConditions(loaded);
+    setLoadingConds(false);
+    if (currentStage === "voorwaarden" && loaded.length > 0 && loaded.every(c => c.status === "vervallen")) {
+      setShowFinancieringBanner(true);
+    }
+  }, [dealId, currentStage]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleToggle(condition: Condition) {
+    const newStatus = condition.status === "open" ? "vervallen" : "open";
+    const supabase = createClient();
+    await supabase.from("conditions").update({ status: newStatus }).eq("id", condition.id);
+    const updated = conditions.map(c => c.id === condition.id ? { ...c, status: newStatus as "open" | "vervallen" } : c);
+    setConditions(updated);
+    if (currentStage === "voorwaarden" && updated.length > 0 && updated.every(c => c.status === "vervallen")) {
+      setShowFinancieringBanner(true);
+    } else {
+      setShowFinancieringBanner(false);
+    }
+  }
+
+  async function handleDeadlineChange(id: string, deadline: string) {
+    const supabase = createClient();
+    await supabase.from("conditions").update({ deadline: deadline || null }).eq("id", id);
+    setConditions(prev => prev.map(c => c.id === id ? { ...c, deadline: deadline || null } : c));
   }
 
   return (
     <SectionWrap title="Ontbindende Voorwaarden">
+      {showFinancieringBanner && (
+        <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "14px 16px", marginBottom: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: "600", color: "#15803d", marginBottom: "2px" }}>Alle voorwaarden vervallen!</div>
+            <div style={{ fontSize: "12px", color: "#16a34a" }}>De deal kan door naar de financiering fase.</div>
+          </div>
+          <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+            <button onClick={() => setShowFinancieringBanner(false)} style={{ padding: "6px 12px", border: "1px solid #bbf7d0", background: "#fff", borderRadius: "6px", fontSize: "12px", color: "#15803d", cursor: "pointer" }}>Later</button>
+            <button onClick={async () => { await onAdvanceStage("financiering", "Fase bijgewerkt naar Financiering"); setShowFinancieringBanner(false); }} style={{ padding: "6px 12px", background: "#16a34a", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "#fff", cursor: "pointer" }}>Naar Financiering →</button>
+          </div>
+        </div>
+      )}
       <Card>
-        <div style={{ fontSize: "10px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "12px" }}>Standaard voorwaarden</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
-          {items.map((item, i) => (
-            <div key={item.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: item.checked ? "#f0fdf4" : "#f8fafc", border: `1px solid ${item.checked ? "#bbf7d0" : "#e8ecf0"}`, borderRadius: "8px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => setItems(prev => prev.map((p, j) => j === i ? { ...p, checked: !p.checked } : p))}>
-                <input type="checkbox" checked={item.checked} onChange={() => {}} style={{ width: "15px", height: "15px", accentColor: "#0284c7", cursor: "pointer" }} />
-                <span style={{ fontSize: "13px", color: item.checked ? "#16a34a" : "#0f172a", fontWeight: "500", textDecoration: item.checked ? "line-through" : "none" }}>{item.label}</span>
+        {loadingConds ? (
+          <div style={{ textAlign: "center", padding: "20px", fontSize: "13px", color: "#94a3b8" }}>Laden…</div>
+        ) : conditions.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "20px", fontSize: "13px", color: "#94a3b8" }}>Geen voorwaarden gevonden. Voorwaarden worden automatisch aangemaakt bij het ondertekenen van de koopovereenkomst.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {conditions.map(c => (
+              <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: c.status === "vervallen" ? "#f0fdf4" : "#f8fafc", border: `1px solid ${c.status === "vervallen" ? "#bbf7d0" : "#e8ecf0"}`, borderRadius: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => handleToggle(c)}>
+                  <input type="checkbox" checked={c.status === "vervallen"} onChange={() => {}} style={{ width: "15px", height: "15px", accentColor: "#16a34a", cursor: "pointer" }} />
+                  <span style={{ fontSize: "13px", color: c.status === "vervallen" ? "#16a34a" : "#0f172a", fontWeight: "500", textDecoration: c.status === "vervallen" ? "line-through" : "none" }}>{c.label}</span>
+                </div>
+                <input type="date" value={c.deadline?.slice(0, 10) ?? ""} onChange={e => handleDeadlineChange(c.id, e.target.value)} style={{ ...sectionInp, width: "140px", fontSize: "11px", padding: "5px 8px" }} />
               </div>
-              <input type="date" value={item.deadline} onChange={e => setItems(prev => prev.map((p, j) => j === i ? { ...p, deadline: e.target.value } : p))} style={{ ...sectionInp, width: "140px", fontSize: "11px", padding: "5px 8px" }} />
-            </div>
-          ))}
-        </div>
-        <div style={{ marginBottom: "12px" }}>
-          <label style={sectionLbl}>Aanvullende opmerkingen</label>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Bijzondere voorwaarden of afspraken..." rows={3} style={{ ...sectionInp, resize: "vertical", lineHeight: "1.5" }} />
-        </div>
-        <button onClick={handleSave} style={{ background: "#0284c7", border: "none", borderRadius: "8px", padding: "9px 16px", fontSize: "13px", fontWeight: "600", color: "#fff", cursor: "pointer" }}>
-          {saved ? "Opgeslagen ✓" : "Opslaan"}
-        </button>
+            ))}
+          </div>
+        )}
       </Card>
     </SectionWrap>
   );
@@ -952,7 +1071,7 @@ function GesprekkenSection({ dealId }: { dealId: string }) {
 
 // ─── Overdracht ───────────────────────────────────────────────────────────────
 
-function OverdrachtSection({ deal, dealId }: { deal: DealWithContacts; dealId: string }) {
+function OverdrachtSection({ deal, dealId, currentStage, onAdvanceStage }: { deal: DealWithContacts; dealId: string; currentStage: DealStage; onAdvanceStage: (s: DealStage, msg: string) => Promise<void> }) {
   const [notary,       setNotary]       = useState(deal.notary_name ?? "");
   const [transferDate, setTransferDate] = useState(deal.transfer_date?.slice(0, 10) ?? "");
   const [meterElec,    setMeterElec]    = useState("");
@@ -961,12 +1080,16 @@ function OverdrachtSection({ deal, dealId }: { deal: DealWithContacts; dealId: s
   const [keys,         setKeys]         = useState("");
   const [saving,       setSaving]       = useState(false);
   const [saved,        setSaved]        = useState(false);
+  const [showOverdrachtBanner, setShowOverdrachtBanner] = useState(false);
 
   async function handleSave() {
     setSaving(true);
     const supabase = createClient();
     await supabase.from("deals").update({ notary_name: notary || null, transfer_date: transferDate || null }).eq("id", dealId);
     setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500);
+    if (notary.trim() && transferDate && currentStage === "financiering") {
+      setShowOverdrachtBanner(true);
+    }
   }
 
   const fields = [
@@ -977,6 +1100,18 @@ function OverdrachtSection({ deal, dealId }: { deal: DealWithContacts; dealId: s
 
   return (
     <SectionWrap title="Overdracht">
+      {showOverdrachtBanner && (
+        <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "10px", padding: "14px 16px", marginBottom: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: "600", color: "#1d4ed8", marginBottom: "2px" }}>Notaris & datum ingesteld!</div>
+            <div style={{ fontSize: "12px", color: "#2563eb" }}>De financiering is rond. Wil je de fase naar Overdracht zetten?</div>
+          </div>
+          <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+            <button onClick={() => setShowOverdrachtBanner(false)} style={{ padding: "6px 12px", border: "1px solid #bfdbfe", background: "#fff", borderRadius: "6px", fontSize: "12px", color: "#1d4ed8", cursor: "pointer" }}>Later</button>
+            <button onClick={async () => { await onAdvanceStage("overdracht", "Fase bijgewerkt naar Overdracht"); setShowOverdrachtBanner(false); }} style={{ padding: "6px 12px", background: "#2563eb", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "#fff", cursor: "pointer" }}>Naar Overdracht →</button>
+          </div>
+        </div>
+      )}
       <Card>
         <div style={{ fontSize: "10px", fontWeight: "600", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "12px" }}>Notaris & Datum</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "16px" }}>
@@ -1146,6 +1281,14 @@ export default function DealDetailPage() {
     setTimeout(() => router.push("/dashboard"), 2000);
   }
 
+  async function advanceStage(newStage: DealStage, msg: string) {
+    const supabase = createClient();
+    await supabase.from("deals").update({ stage: newStage }).eq("id", dealId);
+    setCurrentStage(newStage);
+    setStageToast(msg);
+    setTimeout(() => setStageToast(""), 3000);
+  }
+
   async function handleStageChange(newStage: DealStage) {
     setCurrentStage(newStage);
     setStageDropdownOpen(false);
@@ -1256,7 +1399,7 @@ export default function DealDetailPage() {
       </div>
 
       {/* Stage progress strip */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #e8ecf0", padding: "12px 24px", flexShrink: 0 }}>
+      <div style={{ background: "#fff", borderBottom: "1px solid #e8ecf0", padding: "12px 24px 8px", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center" }}>
           {STAGES.map((s, i) => {
             const completed = i < stageIdx;
@@ -1277,6 +1420,9 @@ export default function DealDetailPage() {
               </div>
             );
           })}
+        </div>
+        <div style={{ textAlign: "right", marginTop: "6px" }}>
+          <span style={{ fontSize: "10px", color: "#94a3b8", fontStyle: "italic" }}>Fase wordt automatisch bijgewerkt op basis van acties in de deal</span>
         </div>
       </div>
 
@@ -1399,14 +1545,14 @@ export default function DealDetailPage() {
             </div>
           )}
 
-          {activeNav === "bezichtigingen" && <BezichtigingenSection dealId={dealId} />}
+          {activeNav === "bezichtigingen" && <BezichtigingenSection dealId={dealId} currentStage={currentStage} onAdvanceStage={advanceStage} />}
           {activeNav === "verkoper" && <VerkoperSection deal={deal} />}
-          {activeNav === "documenten" && <DocumentenSection dealId={dealId} />}
-          {activeNav === "voorwaarden" && <VoorwaardenSection dealId={dealId} />}
+          {activeNav === "documenten" && <DocumentenSection dealId={dealId} currentStage={currentStage} onAdvanceStage={advanceStage} />}
+          {activeNav === "voorwaarden" && <VoorwaardenSection dealId={dealId} currentStage={currentStage} onAdvanceStage={advanceStage} />}
           {activeNav === "wwft" && <WwftSection deal={deal} dealId={dealId} />}
           {activeNav === "whatsapp" && <WhatsAppSection deal={deal} dealId={dealId} />}
           {activeNav === "gesprekken" && <GesprekkenSection dealId={dealId} />}
-          {activeNav === "overdracht" && <OverdrachtSection deal={deal} dealId={dealId} />}
+          {activeNav === "overdracht" && <OverdrachtSection deal={deal} dealId={dealId} currentStage={currentStage} onAdvanceStage={advanceStage} />}
         </div>
       </div>
     </div>
