@@ -48,7 +48,7 @@ export default function RelatiesPage() {
 
     if (!deals || deals.length === 0) { setLoading(false); return; }
 
-    const buyerIds = [...new Set(deals.map((d) => d.buyer_id as string))];
+    const buyerIds = Array.from(new Set(deals.map((d) => d.buyer_id as string)));
     const { data: contacts } = await supabase
       .from("contacts")
       .select("id, name, phone, email")
