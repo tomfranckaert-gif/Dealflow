@@ -750,6 +750,226 @@ function DocumentenSection() {
   );
 }
 
+interface CallEntry {
+  id: string;
+  deal_id: string;
+  contact_id: string | null;
+  duration_seconds: number;
+  summary: string | null;
+  logged_at: string;
+}
+
+const DURATION_OPTIONS = [
+  { label: "1 min",  seconds: 60 },
+  { label: "2 min",  seconds: 120 },
+  { label: "5 min",  seconds: 300 },
+  { label: "10 min", seconds: 600 },
+  { label: "15 min", seconds: 900 },
+  { label: "30 min", seconds: 1800 },
+];
+
+function fmtDuration(s: number) {
+  if (s < 60) return `${s}s`;
+  const m = Math.round(s / 60);
+  return `${m} min`;
+}
+
+function nowLocalIso() {
+  const d = new Date();
+  d.setSeconds(0, 0);
+  return d.toISOString().slice(0, 16);
+}
+
+function GesprekkenSection({ deal, dealId }: { deal: DealWithContacts; dealId: string }) {
+  const supabase = createClient();
+  const [calls, setCalls] = useState<CallEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [contactKey, setContactKey] = useState("koper");
+  const [loggedAt, setLoggedAt] = useState(nowLocalIso);
+  const [durationSeconds, setDurationSeconds] = useState(300);
+  const [note, setNote] = useState("");
+
+  const contactOptions = [
+    deal.buyer_id && deal.buyer ? { key: "koper",    id: deal.buyer_id,   name: deal.buyer.name,   role: "Koper" }    : null,
+    deal.seller_id && deal.seller ? { key: "verkoper", id: deal.seller_id,  name: deal.seller.name,  role: "Verkoper" } : null,
+    { key: "notaris", id: null, name: "Notaris", role: "Notaris" },
+    { key: "bank",    id: null, name: "Bank",    role: "Bank" },
+  ].filter(Boolean) as { key: string; id: string | null; name: string; role: string }[];
+
+  const loadCalls = useCallback(async () => {
+    const { data } = await supabase
+      .from("calls")
+      .select("*")
+      .eq("deal_id", dealId)
+      .order("logged_at", { ascending: false });
+    setCalls((data as CallEntry[]) ?? []);
+    setLoading(false);
+  }, [dealId, supabase]);
+
+  useEffect(() => { loadCalls(); }, [loadCalls]);
+
+  function resolveContact(contactId: string | null) {
+    if (contactId && contactId === deal.buyer_id)  return { name: deal.buyer?.name ?? "Koper",    role: "Koper" };
+    if (contactId && contactId === deal.seller_id) return { name: deal.seller?.name ?? "Verkoper", role: "Verkoper" };
+    return { name: "Externe partij", role: "Extern" };
+  }
+
+  const ROLE_PILL: Record<string, { bg: string; color: string }> = {
+    Koper:    { bg: "#eff6ff", color: "#1d4ed8" },
+    Verkoper: { bg: "#f0fdf4", color: "#15803d" },
+    Notaris:  { bg: "#faf5ff", color: "#7c3aed" },
+    Bank:     { bg: "#fff7ed", color: "#c2410c" },
+    Extern:   { bg: "#f1f5f9", color: "#475569" },
+  };
+
+  async function handleSave() {
+    const opt = contactOptions.find((o) => o.key === contactKey);
+    setSaving(true);
+    await supabase.from("calls").insert({
+      deal_id: dealId,
+      contact_id: opt?.id ?? null,
+      duration_seconds: durationSeconds,
+      summary: note.trim() || null,
+      logged_at: new Date(loggedAt).toISOString(),
+    });
+    setSaving(false);
+    setShowForm(false);
+    setNote("");
+    setLoggedAt(nowLocalIso());
+    setDurationSeconds(300);
+    setContactKey("koper");
+    loadCalls();
+  }
+
+  function openForm() { setLoggedAt(nowLocalIso()); setShowForm(true); }
+
+  return (
+    <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "14px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>
+          Gesprekslog
+        </span>
+        <button
+          onClick={openForm}
+          style={{ padding: "6px 12px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
+        >
+          + Gesprek loggen
+        </button>
+      </div>
+
+      {/* Log form */}
+      {showForm && (
+        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <label style={lbl}>Contact</label>
+              <select
+                value={contactKey}
+                onChange={(e) => setContactKey(e.target.value)}
+                style={inp}
+              >
+                {contactOptions.map((o) => (
+                  <option key={o.key} value={o.key}>{o.role}{o.key !== "notaris" && o.key !== "bank" ? ` — ${o.name}` : ""}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>Duur</label>
+              <select
+                value={durationSeconds}
+                onChange={(e) => setDurationSeconds(Number(e.target.value))}
+                style={inp}
+              >
+                {DURATION_OPTIONS.map((d) => (
+                  <option key={d.seconds} value={d.seconds}>{d.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: "12px" }}>
+            <label style={lbl}>Datum &amp; tijd</label>
+            <input
+              type="datetime-local"
+              value={loggedAt}
+              onChange={(e) => setLoggedAt(e.target.value)}
+              style={inp}
+            />
+          </div>
+          <div style={{ marginBottom: "14px" }}>
+            <label style={lbl}>Notitie</label>
+            <textarea
+              rows={3}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Beschrijf het gesprek..."
+              style={{ ...inp, resize: "vertical" }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+            <button
+              onClick={() => setShowForm(false)}
+              style={{ padding: "7px 14px", background: "transparent", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: "600", color: "#64748b", cursor: "pointer" }}
+            >
+              Annuleren
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              style={{ padding: "7px 14px", background: "#0284c7", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "600", color: "#fff", cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1 }}
+            >
+              {saving ? "Opslaan…" : "Opslaan"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Call list */}
+      {loading ? null : calls.length === 0 ? (
+        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "40px 32px", textAlign: "center" }}>
+          <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>Nog geen gesprekken gelogd</div>
+          <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 16px" }}>Log het eerste gesprek om de communicatie bij te houden.</p>
+          <button
+            onClick={openForm}
+            style={{ padding: "7px 14px", background: "#0284c7", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "600", color: "#fff", cursor: "pointer" }}
+          >
+            + Eerste gesprek loggen
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {calls.map((call) => {
+            const { name, role } = resolveContact(call.contact_id);
+            const pill = ROLE_PILL[role] ?? ROLE_PILL.Extern;
+            const dateStr = new Date(call.logged_at).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+            return (
+              <div key={call.id} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{name}</span>
+                  <span style={{ fontSize: "10px", fontWeight: "600", padding: "2px 7px", borderRadius: "999px", background: pill.bg, color: pill.color }}>
+                    {role}
+                  </span>
+                </div>
+                <div style={{ fontSize: "11px", color: "#94a3b8", marginBottom: call.summary ? "8px" : "0" }}>
+                  {fmtDuration(call.duration_seconds)} · {dateStr}
+                </div>
+                {call.summary && (
+                  <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "10px", fontSize: "12px", color: "#475569", fontStyle: "italic", lineHeight: "1.5" }}>
+                    {call.summary}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatEuro(v: number) {
   return "€ " + v.toLocaleString("nl-NL");
 }
@@ -992,6 +1212,10 @@ export default function DealDetailPage() {
             <DocumentenSection />
           )}
 
+          {activeNav === "gesprekken" && (
+            <GesprekkenSection deal={deal} dealId={dealId} />
+          )}
+
           {activeNav === "wwft" && (
             <WwftSection deal={deal} dealId={dealId} />
           )}
@@ -1000,7 +1224,7 @@ export default function DealDetailPage() {
             <WhatsAppSection deal={deal} dealId={dealId} />
           )}
 
-          {activeNav !== "overzicht" && activeNav !== "documenten" && activeNav !== "wwft" && activeNav !== "whatsapp" && (
+          {activeNav !== "overzicht" && activeNav !== "documenten" && activeNav !== "gesprekken" && activeNav !== "wwft" && activeNav !== "whatsapp" && (
             <div style={{ padding: "40px 24px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%" }}>
               <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "40px 32px", textAlign: "center", maxWidth: "360px", width: "100%" }}>
                 <div style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>
