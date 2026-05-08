@@ -88,6 +88,16 @@ const NAV = [
     ),
   },
   {
+    href: "/dashboard/directeur",
+    label: "Directeur",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+        <path d="M18 8l2 2-2 2"/>
+      </svg>
+    ),
+  },
+  {
     href: "/dashboard/instellingen",
     label: "Instellingen",
     icon: (
