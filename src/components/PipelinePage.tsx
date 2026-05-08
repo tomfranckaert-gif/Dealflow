@@ -247,6 +247,23 @@ export default function PipelinePage({ deals }: Props) {
 
   useEffect(() => { fetchTip(); }, []);
 
+  const mockSearchers = [
+    { name: "Ahmed Al-Hassan", budget: 500000, type: "appartement", city: "Amsterdam" },
+    { name: "Familie Bakker",  budget: 750000, type: "eengezinswoning", city: "Amsterdam" },
+    { name: "Ingrid de Wit",   budget: 400000, type: "appartement", city: "Amsterdam" },
+  ];
+
+  const matches = mockSearchers.flatMap((searcher) =>
+    deals
+      .filter((d) =>
+        d.stage?.toLowerCase() !== "gesloten" &&
+        (d.agreed_price || 0) <= searcher.budget &&
+        d.type?.toLowerCase() === searcher.type &&
+        d.city?.toLowerCase() === searcher.city.toLowerCase()
+      )
+      .map((deal) => ({ searcher, deal }))
+  );
+
   const alerts = buildAlerts(deals);
   const hasAlerts = alerts.length > 0 && !read;
 
@@ -544,6 +561,50 @@ export default function PipelinePage({ deals }: Props) {
                 />
               ))
             )}
+
+            {/* Match alerts */}
+            <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16, marginTop: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em" }}>MATCH ALERTS</div>
+                <div style={{ fontSize: 11, background: "#f5f3ff", color: "#7c3aed", border: "1px solid #ddd6fe", borderRadius: 20, padding: "2px 10px" }}>
+                  {matches.length} matches
+                </div>
+              </div>
+
+              {matches.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {matches.map((m, i) => (
+                    <div key={i} style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 8, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginBottom: 2 }}>{m.searcher.name}</div>
+                        <div style={{ fontSize: 11, color: "#94a3b8" }}>{"zoekt " + m.searcher.type + " tot € " + m.searcher.budget.toLocaleString("nl-NL")}</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#7c3aed", marginBottom: 6 }}>{m.deal.address}</div>
+                        <button
+                          onClick={() => {
+                            const phone = "";
+                            const msg = encodeURIComponent(`Hi ${m.searcher.name}, ik heb een woning die perfect bij je past: ${m.deal.address}. Interesse om te bezichtigen?`);
+                            window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+                          }}
+                          style={{ fontSize: 11, fontWeight: 600, color: "#7c3aed", background: "#fff", border: "1px solid #ddd6fe", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}
+                        >
+                          WhatsApp sturen
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>
+                  Geen matches op dit moment
+                </div>
+              )}
+
+              <div style={{ fontSize: 10, color: "#94a3b8", fontStyle: "italic", marginTop: 12 }}>
+                Zoekopdrachten worden gesynchroniseerd via Realworks koppeling
+              </div>
+            </div>
           </div>
         </div>
       </div>
