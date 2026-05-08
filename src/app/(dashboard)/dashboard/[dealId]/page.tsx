@@ -35,7 +35,7 @@ const STAGE_BADGE: Record<DealStage, { bg: string; text: string; dot: string }> 
   gesloten:     { bg: "#f1f5f9", text: "#374151", dot: "#6b7280" },
 };
 
-type SubNav = "overzicht" | "documenten" | "marketing" | "voorwaarden" | "wwft" | "whatsapp" | "gesprekken" | "overdracht" | "bezichtigingen" | "verkoper";
+type SubNav = "overzicht" | "documenten" | "marketing" | "voorwaarden" | "wwft" | "whatsapp" | "gesprekken" | "overdracht" | "bezichtigingen" | "verkoper" | "funda";
 
 const SUB_NAV: { id: SubNav; label: string; icon: React.ReactNode }[] = [
   {
@@ -49,6 +49,10 @@ const SUB_NAV: { id: SubNav; label: string; icon: React.ReactNode }[] = [
   {
     id: "verkoper", label: "Verkoper",
     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  },
+  {
+    id: "funda", label: "Funda Tekst",
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
   },
   {
     id: "documenten", label: "Documenten",
@@ -1525,6 +1529,223 @@ function MarketingSection({ deal, dealId }: { deal: DealWithContacts; dealId: st
   );
 }
 
+// ─── Funda Tekst Generator ────────────────────────────────────────────────────
+
+function FundaSection({ deal }: { deal: DealWithContacts }) {
+  const [bijzonderheden, setBijzonderheden] = useState("");
+  const [highlights, setHighlights] = useState("");
+  const [tone, setTone] = useState("Vriendelijk & Persoonlijk");
+  const [length, setLength] = useState("Standaard (350 woorden)");
+  const [generating, setGenerating] = useState(false);
+  const [generatedText, setGeneratedText] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [toast, setToast] = useState("");
+
+  const priceFormatted = deal.agreed_price
+    ? "€ " + deal.agreed_price.toLocaleString("nl-NL")
+    : deal.asking_price
+      ? "€ " + deal.asking_price.toLocaleString("nl-NL")
+      : "";
+
+  const wordCount = length.includes("200") ? "200" : length.includes("500") ? "500" : "350";
+
+  async function handleGenerate() {
+    setGenerating(true);
+    setGeneratedText("");
+    const res = await fetch("/api/generate-message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "funda-tekst",
+        dealAddress: deal.address,
+        dealCity: deal.city,
+        propertyType: deal.property_type,
+        price: priceFormatted,
+        highlights,
+        details: bijzonderheden,
+        tone,
+        length: wordCount,
+      }),
+    });
+    const data = await res.json();
+    setGeneratedText(data.message ?? "");
+    setGenerating(false);
+  }
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(generatedText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleSaveAsWhatsApp() {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !deal.seller_id) return;
+    await supabase.from("messages").insert({
+      owner_id: user.id,
+      deal_id: deal.id,
+      contact_id: deal.seller_id,
+      content: generatedText,
+      trigger_event: "Funda tekst concept",
+      status: "concept",
+    });
+    setToast("Opgeslagen als WhatsApp concept");
+    setTimeout(() => setToast(""), 3000);
+  }
+
+  const charCount = generatedText.length;
+  const FUNDA_MAX = 12500;
+
+  return (
+    <div style={{ padding: "20px 24px" }}>
+      {/* Header */}
+      <div style={{ marginBottom: 4 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em" }}>FUNDA TEKST GENERATOR</div>
+        <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>Vervangt Realworks taak 2.5 — tekst schrijven</div>
+      </div>
+
+      {/* Info banner */}
+      <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, padding: "10px 14px", marginTop: 12, marginBottom: 16, fontSize: 11, color: "#0369a1" }}>
+        ✓ Gegenereerde tekst kopiëren naar Realworks → Teksten → Aanbiedingstekst
+      </div>
+
+      {/* Input form */}
+      <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: 16, marginBottom: 14 }}>
+        {/* Read-only deal info */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16, paddingBottom: 14, borderBottom: "1px solid #f1f5f9" }}>
+          {[
+            { label: "ADRES", value: [deal.address, deal.city].filter(Boolean).join(", ") || "—" },
+            { label: "TYPE", value: deal.property_type || "—" },
+            { label: "PRIJS", value: priceFormatted || "—" },
+          ].map((f) => (
+            <div key={f.label}>
+              <div style={lbl}>{f.label}</div>
+              <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 500 }}>{f.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Editable fields */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div>
+            <label style={lbl}>BIJZONDERHEDEN</label>
+            <textarea
+              rows={3}
+              value={bijzonderheden}
+              onChange={(e) => setBijzonderheden(e.target.value)}
+              placeholder="Bijv. recent gerenoveerde keuken, zonnepanelen, dakterras, garage, rustige ligging..."
+              style={{ ...inp, resize: "vertical" }}
+            />
+          </div>
+          <div>
+            <label style={lbl}>HIGHLIGHTS</label>
+            <textarea
+              rows={2}
+              value={highlights}
+              onChange={(e) => setHighlights(e.target.value)}
+              placeholder="Bijv. 5 slaapkamers, energielabel A, bouwjaar 2001..."
+              style={{ ...inp, resize: "vertical" }}
+            />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={lbl}>TONE OF VOICE</label>
+              <select value={tone} onChange={(e) => setTone(e.target.value)} style={inp}>
+                <option>Professioneel &amp; Formeel</option>
+                <option>Vriendelijk &amp; Persoonlijk</option>
+                <option>Direct &amp; Kort</option>
+                <option>Luxe &amp; Exclusief</option>
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>LENGTE</label>
+              <select value={length} onChange={(e) => setLength(e.target.value)} style={inp}>
+                <option>Kort (200 woorden)</option>
+                <option>Standaard (350 woorden)</option>
+                <option>Uitgebreid (500 woorden)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Generate button */}
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          style={{
+            marginTop: 16, width: "100%", padding: 12,
+            background: generating ? "#94a3b8" : "linear-gradient(135deg,#0284c7,#0369a1)",
+            color: "#fff", border: "none", borderRadius: 8,
+            fontSize: 13, fontWeight: 700, cursor: generating ? "default" : "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          }}
+        >
+          {generating ? (
+            <>
+              <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+              Tekst wordt gegenereerd...
+            </>
+          ) : "✦ Genereer Funda tekst"}
+        </button>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+
+      {/* Output */}
+      {generatedText && (
+        <div style={{ background: "#fff", border: "1px solid #bae6fd", borderRadius: 12, padding: 20, marginTop: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: "#0369a1", letterSpacing: "0.1em" }}>GEGENEREERDE TEKST</div>
+            <div style={{ fontSize: 11, color: "#94a3b8" }}>{charCount.toLocaleString("nl-NL")} karakters</div>
+          </div>
+
+          <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.8, whiteSpace: "pre-wrap", fontFamily: "Georgia, serif", marginBottom: 16 }}>
+            {generatedText}
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+            <button
+              onClick={handleCopy}
+              style={{ padding: "8px 16px", background: "#f0f9ff", border: "1px solid #bae6fd", color: "#0284c7", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            >
+              {copied ? "✓ Gekopieerd!" : "Kopieer tekst"}
+            </button>
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              style={{ padding: "8px 16px", background: "transparent", border: "1px solid #e8ecf0", color: "#64748b", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            >
+              Opnieuw genereren
+            </button>
+            {deal.seller_id && (
+              <button
+                onClick={handleSaveAsWhatsApp}
+                style={{ padding: "8px 16px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#16a34a", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+              >
+                WhatsApp naar verkoper
+              </button>
+            )}
+          </div>
+
+          {/* Karakter teller */}
+          <div style={{ fontSize: 11, color: charCount > FUNDA_MAX ? "#ef4444" : "#16a34a", fontWeight: 500 }}>
+            {charCount.toLocaleString("nl-NL")} / {FUNDA_MAX.toLocaleString("nl-NL")} karakters
+            {charCount > FUNDA_MAX && " — te lang voor Funda"}
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div style={{ position: "fixed", bottom: 24, right: 24, background: "#0f172a", color: "#fff", borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 500, zIndex: 100, boxShadow: "0 4px 12px rgba(0,0,0,0.2)" }}>
+          {toast}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DealDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -1862,6 +2083,7 @@ export default function DealDetailPage() {
 
           {activeNav === "bezichtigingen" && <BezichtigingenSection dealId={dealId} currentStage={currentStage} onAdvanceStage={advanceStage} />}
           {activeNav === "verkoper" && <VerkoperSection deal={deal} />}
+          {activeNav === "funda" && <FundaSection deal={deal} />}
           {activeNav === "documenten" && <DocumentenSection dealId={dealId} currentStage={currentStage} onAdvanceStage={advanceStage} />}
           {activeNav === "marketing" && <MarketingSection deal={deal} dealId={dealId} />}
           {activeNav === "voorwaarden" && <VoorwaardenSection dealId={dealId} currentStage={currentStage} onAdvanceStage={advanceStage} />}

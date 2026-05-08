@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  const { dealAddress, dealCity, recipientName, triggerEvent, agentName, type } = await req.json();
+  const body = await req.json();
+  const { dealAddress, dealCity, recipientName, triggerEvent, agentName, type } = body;
 
   let content = [
     agentName ? `Je bent makelaar ${agentName}.` : null,
@@ -15,9 +16,26 @@ export async function POST(req: Request) {
     content = 'Je bent een ervaren Nederlandse makelaar. Geef één concrete tip voor vandaag. Maximaal 2 zinnen. Direct en praktisch.'
   }
 
+  if (type === 'funda-tekst') {
+    content = [
+      'Schrijf een professionele Funda aanbiedingstekst in het Nederlands.',
+      dealAddress ? `Woning: ${dealAddress}${dealCity ? ' in ' + dealCity : ''}.` : null,
+      body.propertyType ? `Type: ${body.propertyType}.` : null,
+      body.price ? `Prijs: ${body.price}.` : null,
+      body.highlights ? `Highlights: ${body.highlights}.` : null,
+      body.details ? `Bijzonderheden: ${body.details}.` : null,
+      body.tone ? `Tone of voice: ${body.tone}.` : null,
+      body.length ? `Lengte: ${body.length} woorden.` : 'Lengte: 350 woorden.',
+      'Structuur: korte intro, indeling per verdieping/ruimte, tuin/buitenruimte, bijzonderheden bullet lijst, afsluitende zin.',
+      'Geen aanhalingstekens. Geen markdown. Alleen platte tekst.',
+    ].filter(Boolean).join(' ')
+  }
+
   if (!content) {
     return NextResponse.json({ message: 'Goedemorgen! Veel succes vandaag.' })
   }
+
+  const isFunda = type === 'funda-tekst';
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -28,13 +46,8 @@ export async function POST(req: Request) {
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 300,
-      messages: [
-        {
-          role: "user",
-          content,
-        },
-      ],
+      max_tokens: isFunda ? 1500 : 300,
+      messages: [{ role: "user", content }],
     }),
   });
 
