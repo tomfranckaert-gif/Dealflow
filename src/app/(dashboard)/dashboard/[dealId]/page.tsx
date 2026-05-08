@@ -35,7 +35,7 @@ const STAGE_BADGE: Record<DealStage, { bg: string; text: string; dot: string }> 
   gesloten:     { bg: "#f1f5f9", text: "#374151", dot: "#6b7280" },
 };
 
-type SubNav = "overzicht" | "documenten" | "voorwaarden" | "wwft" | "whatsapp" | "gesprekken" | "overdracht" | "bezichtigingen" | "verkoper";
+type SubNav = "overzicht" | "documenten" | "marketing" | "voorwaarden" | "wwft" | "whatsapp" | "gesprekken" | "overdracht" | "bezichtigingen" | "verkoper";
 
 const SUB_NAV: { id: SubNav; label: string; icon: React.ReactNode }[] = [
   {
@@ -53,6 +53,10 @@ const SUB_NAV: { id: SubNav; label: string; icon: React.ReactNode }[] = [
   {
     id: "documenten", label: "Documenten",
     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14,2 14,8 20,8" /></svg>,
+  },
+  {
+    id: "marketing", label: "Marketing",
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /></svg>,
   },
   {
     id: "voorwaarden", label: "Voorwaarden",
@@ -1210,6 +1214,206 @@ function ContactCard({ title, contact, avatarColor }: { title: string; contact: 
   );
 }
 
+const CATEGORY_COLORS: Record<string, { color: string; bg: string }> = {
+  Fotografie:        { color: "#7c3aed", bg: "#f5f3ff" },
+  Video:             { color: "#7c3aed", bg: "#f5f3ff" },
+  Drone:             { color: "#7c3aed", bg: "#f5f3ff" },
+  "Funda plaatsing": { color: "#0284c7", bg: "#f0f9ff" },
+  "Funda toppositie":{ color: "#0284c7", bg: "#f0f9ff" },
+  "Te Koop bord":    { color: "#f97316", bg: "#fff7ed" },
+  Brochure:          { color: "#f97316", bg: "#fff7ed" },
+  "Social media":    { color: "#16a34a", bg: "#f0fdf4" },
+  Stylist:           { color: "#16a34a", bg: "#f0fdf4" },
+  Overig:            { color: "#64748b", bg: "#f8fafc" },
+};
+
+const CATEGORIES = ["Fotografie","Video","Drone","Funda plaatsing","Funda toppositie","Te Koop bord","Brochure","Social media","Stylist","Overig"];
+
+interface MarketingCost {
+  id: string;
+  deal_id: string;
+  category: string;
+  description: string | null;
+  amount: number;
+  supplier: string | null;
+  date: string;
+  created_at: string;
+}
+
+function MarketingSection({ deal, dealId }: { deal: DealWithContacts; dealId: string }) {
+  const [costs, setCosts] = useState<MarketingCost[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    category: "Fotografie",
+    supplier: "",
+    amount: "",
+    date: new Date().toISOString().split("T")[0],
+    description: "",
+  });
+
+  const loadCosts = async () => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("marketing_costs")
+      .select("*")
+      .eq("deal_id", dealId)
+      .order("date", { ascending: false });
+    setCosts(data ?? []);
+  };
+
+  useEffect(() => { loadCosts(); }, [dealId]);
+
+  const totalCosts = costs.reduce((sum, c) => sum + Number(c.amount), 0);
+  const courtage = (deal.agreed_price || 0) * 0.015;
+  const netto = courtage - totalCosts;
+  const margin = courtage > 0 ? (netto / courtage * 100).toFixed(1) : "0.0";
+  const fmt = (v: number) => "€ " + v.toLocaleString("nl-NL", { maximumFractionDigits: 0 });
+
+  const daysSinceCreated = Math.floor((Date.now() - new Date(deal.created_at).getTime()) / 86400000);
+  const showRoiAlert =
+    totalCosts > 500 &&
+    (deal.stage === "lead" || deal.stage === "bezichtiging") &&
+    daysSinceCreated > 30;
+
+  async function handleAdd() {
+    if (!form.amount || isNaN(Number(form.amount))) return;
+    setSaving(true);
+    const supabase = createClient();
+    await supabase.from("marketing_costs").insert({
+      deal_id: dealId,
+      category: form.category,
+      description: form.description || null,
+      amount: Number(form.amount),
+      supplier: form.supplier || null,
+      date: form.date,
+    });
+    setSaving(false);
+    setShowForm(false);
+    setForm({ category: "Fotografie", supplier: "", amount: "", date: new Date().toISOString().split("T")[0], description: "" });
+    loadCosts();
+  }
+
+  async function handleDelete(id: string) {
+    const supabase = createClient();
+    await supabase.from("marketing_costs").delete().eq("id", id);
+    loadCosts();
+  }
+
+  return (
+    <div style={{ padding: "20px 24px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em" }}>MARKETING BUDGET</div>
+        <button
+          onClick={() => setShowForm((v) => !v)}
+          style={{ background: "#0284c7", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+        >
+          + Uitgave toevoegen
+        </button>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
+        {[
+          {
+            label: "UITGAVEN",
+            value: fmt(totalCosts),
+            color: totalCosts > courtage * 0.1 ? "#ef4444" : "#0f172a",
+            bg: totalCosts > courtage * 0.1 ? "#fef2f2" : "#f8fafc",
+            border: totalCosts > courtage * 0.1 ? "#fca5a5" : "#e8ecf0",
+          },
+          { label: "COURTAGE", value: fmt(courtage), color: "#0284c7", bg: "#f0f9ff", border: "#bae6fd" },
+          {
+            label: "NETTO MARGE",
+            value: fmt(netto) + " (" + margin + "%)",
+            color: netto >= 0 ? "#16a34a" : "#ef4444",
+            bg: netto >= 0 ? "#f0fdf4" : "#fef2f2",
+            border: netto >= 0 ? "#bbf7d0" : "#fca5a5",
+          },
+        ].map((c) => (
+          <div key={c.label} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 10, padding: 14 }}>
+            <div style={{ fontSize: 9, fontWeight: 600, color: c.color, letterSpacing: "0.08em", marginBottom: 6, textTransform: "uppercase" }}>{c.label}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: c.color }}>{c.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ROI alert */}
+      {showRoiAlert && (
+        <div style={{ background: "#fef9c3", border: "1px solid #fde047", borderRadius: 8, padding: "12px 14px", marginBottom: 16, fontSize: 13, color: "#854d0e" }}>
+          ⚠️ Hoog marketingbudget ({fmt(totalCosts)}) — woning staat al {daysSinceCreated} dagen te koop zonder bod. Overweeg prijsaanpassing of nieuwe marketing aanpak.
+        </div>
+      )}
+
+      {/* Add form */}
+      {showForm && (
+        <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 12, padding: 16, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <label style={lbl}>CATEGORIE</label>
+              <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inp}>
+                {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>LEVERANCIER</label>
+              <input placeholder="Bijv. Zibber, Funda" value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} style={inp} />
+            </div>
+            <div>
+              <label style={lbl}>BEDRAG</label>
+              <div style={{ display: "flex", alignItems: "center", border: "1px solid #e8ecf0", borderRadius: 8, background: "#fff", overflow: "hidden" }}>
+                <span style={{ padding: "9px 10px", fontSize: 13, color: "#64748b", borderRight: "1px solid #e8ecf0" }}>€</span>
+                <input type="number" placeholder="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={{ ...inp, border: "none", borderRadius: 0 }} />
+              </div>
+            </div>
+            <div>
+              <label style={lbl}>DATUM</label>
+              <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} style={inp} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={lbl}>OMSCHRIJVING (optioneel)</label>
+            <input placeholder="Toelichting" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={inp} />
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={handleAdd} disabled={saving} style={{ background: "#0284c7", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              {saving ? "Opslaan..." : "Toevoegen"}
+            </button>
+            <button onClick={() => setShowForm(false)} style={{ background: "transparent", color: "#64748b", border: "1px solid #e8ecf0", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>
+              Annuleren
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Costs list */}
+      {costs.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "32px 0", fontSize: 13, color: "#94a3b8" }}>Nog geen marketinguitgaven geregistreerd</div>
+      ) : (
+        costs.map((c) => {
+          const cat = CATEGORY_COLORS[c.category] ?? CATEGORY_COLORS["Overig"];
+          return (
+            <div key={c.id} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 8, padding: "12px 16px", marginBottom: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <span style={{ display: "inline-block", background: cat.bg, color: cat.color, borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 600, marginBottom: 4 }}>{c.category}</span>
+                {c.supplier && <div style={{ fontSize: 11, color: "#94a3b8" }}>{c.supplier}</div>}
+              </div>
+              <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#ef4444" }}>{"€ " + Number(c.amount).toLocaleString("nl-NL", { maximumFractionDigits: 0 })}</div>
+                  <div style={{ fontSize: 10, color: "#94a3b8" }}>{new Date(c.date).toLocaleDateString("nl-NL")}</div>
+                </div>
+                <button onClick={() => handleDelete(c.id)} style={{ background: "transparent", border: "none", color: "#94a3b8", fontSize: 16, cursor: "pointer", lineHeight: 1 }}>×</button>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 export default function DealDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -1548,6 +1752,7 @@ export default function DealDetailPage() {
           {activeNav === "bezichtigingen" && <BezichtigingenSection dealId={dealId} currentStage={currentStage} onAdvanceStage={advanceStage} />}
           {activeNav === "verkoper" && <VerkoperSection deal={deal} />}
           {activeNav === "documenten" && <DocumentenSection dealId={dealId} currentStage={currentStage} onAdvanceStage={advanceStage} />}
+          {activeNav === "marketing" && <MarketingSection deal={deal} dealId={dealId} />}
           {activeNav === "voorwaarden" && <VoorwaardenSection dealId={dealId} currentStage={currentStage} onAdvanceStage={advanceStage} />}
           {activeNav === "wwft" && <WwftSection deal={deal} dealId={dealId} />}
           {activeNav === "whatsapp" && <WhatsAppSection deal={deal} dealId={dealId} />}
