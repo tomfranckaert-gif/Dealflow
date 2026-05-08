@@ -35,7 +35,7 @@ const STAGE_BADGE: Record<DealStage, { bg: string; text: string; dot: string }> 
   gesloten:     { bg: "#f1f5f9", text: "#374151", dot: "#6b7280" },
 };
 
-type SubNav = "overzicht" | "documenten" | "marketing" | "voorwaarden" | "wwft" | "whatsapp" | "gesprekken" | "overdracht" | "bezichtigingen" | "verkoper" | "funda";
+type SubNav = "overzicht" | "documenten" | "marketing" | "voorwaarden" | "wwft" | "whatsapp" | "gesprekken" | "overdracht" | "bezichtigingen" | "verkoper" | "funda" | "gastenlijst";
 
 const SUB_NAV: { id: SubNav; label: string; icon: React.ReactNode }[] = [
   {
@@ -45,6 +45,10 @@ const SUB_NAV: { id: SubNav; label: string; icon: React.ReactNode }[] = [
   {
     id: "bezichtigingen", label: "Bezichtigingen",
     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
+  },
+  {
+    id: "gastenlijst", label: "Gastenlijst",
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
   },
   {
     id: "verkoper", label: "Verkoper",
@@ -1529,6 +1533,209 @@ function MarketingSection({ deal, dealId }: { deal: DealWithContacts; dealId: st
   );
 }
 
+// ─── Gastenlijst ──────────────────────────────────────────────────────────────
+
+interface Guest {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  budget: string | null;
+  interest_level: string | null;
+  has_agent: boolean;
+  has_mortgage: boolean;
+  note: string | null;
+  created_at: string;
+}
+
+const INTEREST_STYLE: Record<string, { bg: string; color: string; label: string }> = {
+  zeer_geinteresseerd: { bg: "#dcfce7", color: "#16a34a", label: "Zeer geïnteresseerd" },
+  geinteresseerd:      { bg: "#dbeafe", color: "#1e40af", label: "Geïnteresseerd" },
+  neutraal:            { bg: "#f1f5f9", color: "#64748b", label: "Neutraal" },
+  niet_geinteresseerd: { bg: "#fee2e2", color: "#991b1b", label: "Niet geïnteresseerd" },
+};
+
+function GastenlijstSection({ deal, dealId }: { deal: DealWithContacts; dealId: string }) {
+  const [guests, setGuests] = useState<Guest[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: "", phone: "", email: "",
+    budget: "Onbekend", interest_level: "neutraal",
+    has_agent: false, has_mortgage: false, note: "",
+  });
+
+  const loadGuests = async () => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("viewings_guests")
+      .select("*")
+      .eq("deal_id", dealId)
+      .order("created_at", { ascending: false });
+    setGuests((data ?? []) as Guest[]);
+  };
+
+  useEffect(() => { loadGuests(); }, [dealId]);
+
+  async function openQr() {
+    const QRCode = (await import("qrcode")).default;
+    const url = `${window.location.origin}/inchecken/${dealId}`;
+    const dataUrl = await QRCode.toDataURL(url, { width: 200, margin: 2 });
+    setQrDataUrl(dataUrl);
+    setShowQr(true);
+  }
+
+  async function handleAdd() {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    const supabase = createClient();
+    await supabase.from("viewings_guests").insert({
+      deal_id: dealId,
+      name: form.name.trim(),
+      phone: form.phone || null,
+      email: form.email || null,
+      budget: form.budget,
+      interest_level: form.interest_level,
+      has_agent: form.has_agent,
+      has_mortgage: form.has_mortgage,
+      note: form.note || null,
+      source: "manual",
+      event_date: new Date().toISOString().split("T")[0],
+    });
+    setSaving(false);
+    setShowForm(false);
+    setForm({ name: "", phone: "", email: "", budget: "Onbekend", interest_level: "neutraal", has_agent: false, has_mortgage: false, note: "" });
+    loadGuests();
+  }
+
+  const interested = guests.filter(g => ["geinteresseerd","zeer_geinteresseerd"].includes(g.interest_level ?? ""));
+  const hasAgent = guests.filter(g => g.has_agent);
+
+  return (
+    <div style={{ padding: "20px 24px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em" }}>GASTENLIJST</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={openQr} style={{ padding: "7px 14px", background: "transparent", border: "1px solid #0284c7", borderRadius: 8, color: "#0284c7", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>QR Code</button>
+          <button onClick={() => setShowForm(v => !v)} style={{ padding: "7px 14px", background: "#0284c7", border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Gast toevoegen</button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
+        {[
+          { label: "TOTAAL GASTEN",    value: guests.length,      bg: "#f8fafc", color: "#0f172a" },
+          { label: "GEÏNTERESSEERD",   value: interested.length,  bg: "#f0fdf4", color: "#16a34a" },
+          { label: "HEBBEN MAKELAAR",  value: hasAgent.length,    bg: "#fef2f2", color: "#ef4444" },
+        ].map(s => (
+          <div key={s.label} style={{ background: s.bg, border: "1px solid #e8ecf0", borderRadius: 10, padding: 14 }}>
+            <div style={{ fontSize: 9, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.08em", marginBottom: 6, textTransform: "uppercase" }}>{s.label}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Add form */}
+      {showForm && (
+        <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 12, padding: 16, marginBottom: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div style={{ gridColumn: "1/-1" }}>
+              <label style={lbl}>NAAM *</label>
+              <input value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Voor- en achternaam" style={inp} />
+            </div>
+            <div><label style={lbl}>TELEFOON</label><input type="tel" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} placeholder="+31 6 12 34 56 78" style={inp} /></div>
+            <div><label style={lbl}>E-MAIL</label><input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="naam@email.nl" style={inp} /></div>
+            <div>
+              <label style={lbl}>BUDGET</label>
+              <select value={form.budget} onChange={e => setForm({...form, budget: e.target.value})} style={inp}>
+                {["< €300k","€300-400k","€400-500k","€500-700k","> €700k","Onbekend"].map(o => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>INTERESSE</label>
+              <select value={form.interest_level} onChange={e => setForm({...form, interest_level: e.target.value})} style={inp}>
+                <option value="zeer_geinteresseerd">Zeer geïnteresseerd</option>
+                <option value="geinteresseerd">Geïnteresseerd</option>
+                <option value="neutraal">Neutraal</option>
+                <option value="niet_geinteresseerd">Niet geïnteresseerd</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 20, marginBottom: 10 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#374151", cursor: "pointer" }}>
+              <input type="checkbox" checked={form.has_agent} onChange={e => setForm({...form, has_agent: e.target.checked})} />
+              Heeft al een makelaar
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#374151", cursor: "pointer" }}>
+              <input type="checkbox" checked={form.has_mortgage} onChange={e => setForm({...form, has_mortgage: e.target.checked})} />
+              Hypotheek al geregeld
+            </label>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={lbl}>NOTITIE</label>
+            <textarea rows={2} value={form.note} onChange={e => setForm({...form, note: e.target.value})} placeholder="Optionele notitie..." style={{ ...inp, resize: "vertical" }} />
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={handleAdd} disabled={saving || !form.name.trim()} style={{ background: "#0284c7", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving || !form.name.trim() ? 0.5 : 1 }}>
+              {saving ? "Opslaan..." : "Gast toevoegen"}
+            </button>
+            <button onClick={() => setShowForm(false)} style={{ background: "transparent", border: "1px solid #e8ecf0", color: "#64748b", borderRadius: 8, padding: "8px 16px", fontSize: 13, cursor: "pointer" }}>Annuleren</button>
+          </div>
+        </div>
+      )}
+
+      {/* Guest list */}
+      {guests.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "32px 0", fontSize: 13, color: "#94a3b8" }}>Nog geen gasten — deel de QR code bij de bezichtiging</div>
+      ) : guests.map(g => {
+        const ist = INTEREST_STYLE[g.interest_level ?? "neutraal"] ?? INTEREST_STYLE.neutraal;
+        return (
+          <div key={g.id} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 10, padding: "12px 16px", marginBottom: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{g.name}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, background: ist.bg, color: ist.color, borderRadius: 20, padding: "2px 10px" }}>{ist.label}</span>
+            </div>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6 }}>
+              {[g.phone, g.email].filter(Boolean).join(" · ")}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {g.budget && g.budget !== "Onbekend" && (
+                <span style={{ fontSize: 11, fontWeight: 600, background: "#f0f9ff", color: "#0284c7", borderRadius: 20, padding: "2px 8px" }}>{g.budget}</span>
+              )}
+              {g.has_agent && (
+                <span style={{ fontSize: 11, fontWeight: 600, background: "#fee2e2", color: "#991b1b", borderRadius: 20, padding: "2px 8px" }}>Heeft makelaar</span>
+              )}
+              {g.has_mortgage && (
+                <span style={{ fontSize: 11, fontWeight: 600, background: "#f0fdf4", color: "#16a34a", borderRadius: 20, padding: "2px 8px" }}>Hypotheek klaar</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* QR modal */}
+      {showQr && (
+        <>
+          <div onClick={() => setShowQr(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200 }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "#fff", borderRadius: 16, padding: 32, maxWidth: 400, width: "90%", zIndex: 201, textAlign: "center" }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>Check-in QR Code</div>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 20 }}>{deal.address}</div>
+            {qrDataUrl && <img src={qrDataUrl} width={200} height={200} alt="QR code" style={{ display: "block", margin: "0 auto 16px" }} />}
+            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 20 }}>Laat gasten scannen bij binnenkomst</div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <button onClick={() => window.print()} style={{ padding: "8px 16px", background: "#f0f9ff", border: "1px solid #bae6fd", color: "#0284c7", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Print QR code</button>
+              <button onClick={() => setShowQr(false)} style={{ padding: "8px 16px", background: "transparent", border: "1px solid #e8ecf0", color: "#64748b", borderRadius: 8, fontSize: 13, cursor: "pointer" }}>Sluit</button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Funda Tekst Generator ────────────────────────────────────────────────────
 
 function FundaSection({ deal }: { deal: DealWithContacts }) {
@@ -2082,6 +2289,7 @@ export default function DealDetailPage() {
           )}
 
           {activeNav === "bezichtigingen" && <BezichtigingenSection dealId={dealId} currentStage={currentStage} onAdvanceStage={advanceStage} />}
+          {activeNav === "gastenlijst" && <GastenlijstSection deal={deal} dealId={dealId} />}
           {activeNav === "verkoper" && <VerkoperSection deal={deal} />}
           {activeNav === "funda" && <FundaSection deal={deal} />}
           {activeNav === "documenten" && <DocumentenSection dealId={dealId} currentStage={currentStage} onAdvanceStage={advanceStage} />}
