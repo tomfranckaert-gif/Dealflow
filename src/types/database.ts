@@ -49,9 +49,12 @@ export interface Contact {
   email: string | null;
   phone: string | null;
   type: "buyer" | "seller";
+  partner_name: string | null;
+  partner_email: string | null;
+  partner_phone: string | null;
 }
 
 export interface DealWithContacts extends Deal {
-  buyer: Pick<Contact, "name" | "email" | "phone"> | null;
-  seller: Pick<Contact, "name" | "email" | "phone"> | null;
+  buyer: Pick<Contact, "name" | "email" | "phone" | "partner_name" | "partner_email" | "partner_phone"> | null;
+  seller: Pick<Contact, "name" | "email" | "phone" | "partner_name" | "partner_email" | "partner_phone"> | null;
 }

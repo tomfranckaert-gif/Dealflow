@@ -1174,7 +1174,7 @@ function Avatar({ name, color }: { name: string; color: string }) {
   );
 }
 
-function ContactCard({ title, contact, avatarColor }: { title: string; contact: { name: string; email: string | null; phone: string | null } | null; avatarColor: string }) {
+function ContactCard({ title, contact, avatarColor }: { title: string; contact: { name: string; email: string | null; phone: string | null; partner_name?: string | null; partner_email?: string | null; partner_phone?: string | null } | null; avatarColor: string }) {
   if (!contact) return (
     <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px", flex: 1 }}>
       <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "12px" }}>{title}</div>
@@ -1187,7 +1187,12 @@ function ContactCard({ title, contact, avatarColor }: { title: string; contact: 
       <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "12px" }}>{title}</div>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px" }}>
         <Avatar name={contact.name} color={avatarColor} />
-        <span style={{ fontSize: "15px", fontWeight: "600", color: "#0f172a" }}>{contact.name}</span>
+        <div>
+          <span style={{ fontSize: "15px", fontWeight: "600", color: "#0f172a" }}>{contact.name}</span>
+          {contact.partner_name && (
+            <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>& {contact.partner_name}</div>
+          )}
+        </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "14px" }}>
         {contact.phone && (
@@ -1205,11 +1210,18 @@ function ContactCard({ title, contact, avatarColor }: { title: string; contact: 
           </div>
         )}
       </div>
-      {contact.phone && (
-        <button style={{ padding: "6px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "6px", color: "#16a34a", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
-          WhatsApp
-        </button>
-      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {contact.phone && (
+          <button style={{ padding: "6px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "6px", color: "#16a34a", fontSize: "11px", fontWeight: "600", cursor: "pointer" }}>
+            WhatsApp
+          </button>
+        )}
+        {contact.partner_phone && (
+          <a href={`https://wa.me/${contact.partner_phone}`} target="_blank" style={{ fontSize: 11, color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "5px 10px", textDecoration: "none", display: "inline-block", marginTop: 0 }}>
+            WhatsApp {contact.partner_name || "partner"}
+          </a>
+        )}
+      </div>
     </div>
   );
 }

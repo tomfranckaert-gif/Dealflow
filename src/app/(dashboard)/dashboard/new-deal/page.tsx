@@ -13,6 +13,9 @@ interface Buyer {
   name: string;
   email: string;
   phone: string;
+  partnerName?: string;
+  partnerEmail?: string;
+  partnerPhone?: string;
 }
 
 interface DealData {
@@ -258,9 +261,12 @@ function Step2({ property, confirmed, onConfirm }: { property: RealworksProperty
 function Step3({ buyer, onBuyer }: { buyer: Buyer | null; onBuyer: (b: Buyer) => void }) {
   const [tab, setTab] = useState<"search" | "new">("new");
   const [query, setQuery] = useState("");
-  const [name, setName]   = useState(buyer?.name ?? "");
-  const [phone, setPhone] = useState(buyer?.phone ?? "");
-  const [email, setEmail] = useState(buyer?.email ?? "");
+  const [name, setName]           = useState(buyer?.name ?? "");
+  const [phone, setPhone]         = useState(buyer?.phone ?? "");
+  const [email, setEmail]         = useState(buyer?.email ?? "");
+  const [partnerName, setPartnerName]   = useState(buyer?.partnerName ?? "");
+  const [partnerPhone, setPartnerPhone] = useState(buyer?.partnerPhone ?? "");
+  const [partnerEmail, setPartnerEmail] = useState(buyer?.partnerEmail ?? "");
 
   const filtered = MOCK_BUYERS.filter((b) =>
     b.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -268,8 +274,8 @@ function Step3({ buyer, onBuyer }: { buyer: Buyer | null; onBuyer: (b: Buyer) =>
   );
 
   useEffect(() => {
-    if (tab === "new" && (name || phone || email)) onBuyer({ name, email, phone });
-  }, [name, phone, email, tab]);
+    if (tab === "new" && (name || phone || email)) onBuyer({ name, email, phone, partnerName, partnerPhone, partnerEmail });
+  }, [name, phone, email, partnerName, partnerPhone, partnerEmail, tab]);
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
     flex: 1, padding: "10px", fontSize: 13, fontWeight: active ? 600 : 400,
@@ -322,6 +328,20 @@ function Step3({ buyer, onBuyer }: { buyer: Buyer | null; onBuyer: (b: Buyer) =>
           <div><label style={labelSt}>Volledige naam</label><FocusInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Voor- en achternaam" /></div>
           <div><label style={labelSt}>Telefoonnummer</label><FocusInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+31 6 12 34 56 78" /></div>
           <div><label style={labelSt}>E-mailadres</label><FocusInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="koper@email.nl" /></div>
+
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #f1f5f9" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.3px", textTransform: "uppercase", marginBottom: 12 }}>
+              Partner (optioneel)
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div><label style={labelSt}>Naam partner</label><FocusInput value={partnerName} onChange={(e) => setPartnerName(e.target.value)} placeholder="Voor- en achternaam" /></div>
+              <div><label style={labelSt}>Telefoon partner</label><FocusInput value={partnerPhone} onChange={(e) => setPartnerPhone(e.target.value)} placeholder="+31 6 12 34 56 78" /></div>
+              <div><label style={labelSt}>E-mail partner</label><FocusInput type="email" value={partnerEmail} onChange={(e) => setPartnerEmail(e.target.value)} placeholder="partner@email.nl" /></div>
+            </div>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 10 }}>
+              Bijv. bij aankoop door twee personen samen
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -438,7 +458,7 @@ export default function NewDealPage() {
     if (e1) { setError(`Contact (verkoper): ${e1.message}`); setSubmitting(false); return; }
 
     const { data: buyerContact, error: e2 } = await supabase.from("contacts")
-      .insert({ owner_id: user.id, name: buyer.name, email: buyer.email || null, phone: buyer.phone || null })
+      .insert({ owner_id: user.id, name: buyer.name, email: buyer.email || null, phone: buyer.phone || null, partner_name: buyer.partnerName || null, partner_email: buyer.partnerEmail || null, partner_phone: buyer.partnerPhone || null })
       .select().single();
     if (e2) { setError(`Contact (koper): ${e2.message}`); setSubmitting(false); return; }
 
