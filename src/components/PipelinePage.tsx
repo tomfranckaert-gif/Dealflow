@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 import type { DealWithContacts, DealStage } from "@/types/database";
 
 const STAGES: { id: DealStage; label: string; short: string; bg: string; text: string; dot: string }[] = [
@@ -206,6 +207,35 @@ export default function PipelinePage({ deals }: Props) {
   const [search, setSearch] = useState("");
   const [bellOpen, setBellOpen] = useState(false);
   const [read, setRead] = useState(false);
+  const [agentName, setAgentName] = useState("Makelaar");
+  const [today, setToday] = useState("");
+  const [tip, setTip] = useState("");
+  const [tipLoading, setTipLoading] = useState(true);
+
+  useEffect(() => {
+    setToday(new Date().toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }));
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase.from("agents").select("name").eq("id", user.id).single().then(({ data: agent }) => {
+        setAgentName(agent?.name || user?.email?.split("@")[0] || "Makelaar");
+      });
+    });
+  }, []);
+
+  const fetchTip = async () => {
+    setTipLoading(true);
+    const res = await fetch("/api/generate-message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "daily-tip", dealCount: deals.length, urgentCount: 0, stage: "Voorwaarden" }),
+    });
+    const data = await res.json();
+    setTip(data.message);
+    setTipLoading(false);
+  };
+
+  useEffect(() => { fetchTip(); }, []);
 
   const alerts = buildAlerts(deals);
   const hasAlerts = alerts.length > 0 && !read;
@@ -229,86 +259,104 @@ export default function PipelinePage({ deals }: Props) {
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      {/* Top bar */}
-      <div style={{ height: "56px", background: "#fff", borderBottom: "1px solid #e8ecf0", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", flexShrink: 0 }}>
-        <div>
-          <span style={{ fontSize: "20px", fontWeight: "700", color: "#0f172a", letterSpacing: "-0.5px" }}>Pipeline</span>
-          <span style={{ fontSize: "13px", color: "#94a3b8", marginLeft: "12px" }}>Beheer je vastgoedtransacties</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div style={{ background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: "8px", padding: "6px 12px", display: "flex", alignItems: "center", gap: "6px" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-            <input
-              placeholder="Zoeken..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{ border: "none", background: "transparent", fontSize: "13px", color: "#0f172a", outline: "none", width: "140px" }}
-            />
+      {/* Page header */}
+      <div style={{ background: "#fff", borderBottom: "1px solid #e8ecf0", padding: "16px 24px", flexShrink: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.5px" }}>
+              Goedemorgen, {agentName} 👋
+            </div>
+            <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 4, textTransform: "capitalize" }}>
+              {today}
+            </div>
           </div>
-          {/* Bell */}
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setBellOpen((o) => !o)}
-              style={{ position: "relative", background: "none", border: "none", cursor: "pointer", padding: "6px", display: "flex", alignItems: "center", color: "#64748b" }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-              </svg>
-              {hasAlerts && (
-                <span style={{ position: "absolute", top: "4px", right: "4px", width: "8px", height: "8px", borderRadius: "50%", background: "#ef4444", border: "2px solid #fff" }} />
-              )}
-            </button>
-
-            {bellOpen && (
-              <>
-                {/* Click-away overlay */}
-                <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setBellOpen(false)} />
-                {/* Dropdown */}
-                <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: "320px", background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.08)", zIndex: 50, overflow: "hidden" }}>
-                  {/* Header */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
-                    <span style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>Meldingen</span>
-                    {alerts.length > 0 && (
-                      <button
-                        onClick={() => { setRead(true); setBellOpen(false); }}
-                        style={{ fontSize: "11px", color: "#0284c7", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-                      >
-                        Alles als gelezen markeren
-                      </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: "8px", padding: "6px 12px", display: "flex", alignItems: "center", gap: "6px" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+              <input
+                placeholder="Zoeken..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ border: "none", background: "transparent", fontSize: "13px", color: "#0f172a", outline: "none", width: "140px" }}
+              />
+            </div>
+            {/* Bell */}
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setBellOpen((o) => !o)}
+                style={{ position: "relative", background: "none", border: "none", cursor: "pointer", padding: "6px", display: "flex", alignItems: "center", color: "#64748b" }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+                {hasAlerts && (
+                  <span style={{ position: "absolute", top: "4px", right: "4px", width: "8px", height: "8px", borderRadius: "50%", background: "#ef4444", border: "2px solid #fff" }} />
+                )}
+              </button>
+              {bellOpen && (
+                <>
+                  <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setBellOpen(false)} />
+                  <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: "320px", background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.08)", zIndex: 50, overflow: "hidden" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
+                      <span style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>Meldingen</span>
+                      {alerts.length > 0 && (
+                        <button
+                          onClick={() => { setRead(true); setBellOpen(false); }}
+                          style={{ fontSize: "11px", color: "#0284c7", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                        >
+                          Alles als gelezen markeren
+                        </button>
+                      )}
+                    </div>
+                    {alerts.length === 0 ? (
+                      <div style={{ padding: "32px 16px", textAlign: "center", fontSize: "13px", color: "#94a3b8" }}>
+                        Geen nieuwe meldingen
+                      </div>
+                    ) : (
+                      <div style={{ maxHeight: "340px", overflowY: "auto" }}>
+                        {alerts.map((alert) => (
+                          <div
+                            key={alert.id}
+                            style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "12px 16px", borderLeft: `3px solid ${alert.borderColor}`, borderBottom: "1px solid #f8fafc" }}
+                          >
+                            <span style={{ fontSize: "14px", flexShrink: 0, marginTop: "1px" }}>{alert.icon}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: "13px", fontWeight: "500", color: "#0f172a", marginBottom: "2px" }}>{alert.title}</div>
+                              <div style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{alert.subtitle}</div>
+                            </div>
+                            <span style={{ fontSize: "10px", color: "#94a3b8", whiteSpace: "nowrap", flexShrink: 0, marginTop: "2px" }}>{alert.timeAgo}</span>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-
-                  {/* Alert list */}
-                  {alerts.length === 0 ? (
-                    <div style={{ padding: "32px 16px", textAlign: "center", fontSize: "13px", color: "#94a3b8" }}>
-                      Geen nieuwe meldingen
-                    </div>
-                  ) : (
-                    <div style={{ maxHeight: "340px", overflowY: "auto" }}>
-                      {alerts.map((alert) => (
-                        <div
-                          key={alert.id}
-                          style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "12px 16px", borderLeft: `3px solid ${alert.borderColor}`, borderBottom: "1px solid #f8fafc" }}
-                        >
-                          <span style={{ fontSize: "14px", flexShrink: 0, marginTop: "1px" }}>{alert.icon}</span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: "13px", fontWeight: "500", color: "#0f172a", marginBottom: "2px" }}>{alert.title}</div>
-                            <div style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{alert.subtitle}</div>
-                          </div>
-                          <span style={{ fontSize: "10px", color: "#94a3b8", whiteSpace: "nowrap", flexShrink: 0, marginTop: "2px" }}>{alert.timeAgo}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
+                </>
+              )}
+            </div>
+            <Link href="/dashboard/new-deal" style={{ background: "#0284c7", color: "#fff", borderRadius: "8px", padding: "8px 14px", fontSize: "13px", fontWeight: "600", textDecoration: "none", whiteSpace: "nowrap" }}>
+              + Nieuwe deal
+            </Link>
           </div>
+        </div>
 
-          <Link href="/dashboard/new-deal" style={{ background: "#0284c7", color: "#fff", borderRadius: "8px", padding: "8px 14px", fontSize: "13px", fontWeight: "600", textDecoration: "none", whiteSpace: "nowrap" }}>
-            + Nieuwe deal
-          </Link>
+        {/* AI daily tip */}
+        <div style={{
+          background: "linear-gradient(135deg,#f0f9ff,#f5f3ff)",
+          border: "1px solid #c7d2fe",
+          borderRadius: 10, padding: "14px 18px",
+          display: "flex", justifyContent: "space-between",
+          alignItems: "center", gap: 16,
+        }}>
+          <div>
+            <div style={{ fontSize: 10, color: "#6366f1", letterSpacing: "0.1em", marginBottom: 4 }}>
+              ✦ AI TIP VOOR VANDAAG
+            </div>
+            <div style={{ fontSize: 13, color: "#374151", fontStyle: "italic" }}>
+              {tipLoading ? "Tip wordt geladen..." : tip}
+            </div>
+          </div>
+          <button onClick={fetchTip} style={{ background: "transparent", border: "none", color: "#94a3b8", fontSize: 18, cursor: "pointer" }}>↻</button>
         </div>
       </div>
 
