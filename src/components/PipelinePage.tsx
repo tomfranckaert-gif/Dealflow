@@ -408,6 +408,72 @@ export default function PipelinePage({ deals }: Props) {
         </div>
       </div>
 
+      {/* Financieel overzicht */}
+      {(() => {
+        const courtage_pct = 0.015;
+        const overdrachtDeals = deals.filter((d) => d.stage?.toLowerCase() === "overdracht");
+        const totalCourtage = deals
+          .filter((d) => d.stage?.toLowerCase() !== "gesloten")
+          .reduce((sum, d) => sum + ((d.agreed_price || 0) * courtage_pct), 0);
+        const overdrachtCourtage = overdrachtDeals.reduce((sum, d) => sum + ((d.agreed_price || 0) * courtage_pct), 0);
+        const activeDeals = deals.filter((d) => d.stage?.toLowerCase() !== "gesloten");
+        return (
+          <div style={{ background: "#f8fafc", padding: "0 24px", flexShrink: 0 }}>
+            <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em", marginBottom: 14 }}>
+                FINANCIEEL OVERZICHT
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
+                {[
+                  { label: "OVERDRACHTEN", value: overdrachtDeals.length.toString(), sub: "€ " + overdrachtCourtage.toLocaleString("nl-NL", { maximumFractionDigits: 0 }) + " verwacht", bg: "#f0fdf4", border: "#bbf7d0", color: "#16a34a" },
+                  { label: "OPENSTAANDE FACTUREN", value: "€ 0", sub: "Gesynchroniseerd via WeFact", bg: "#fef9c3", border: "#fde047", color: "#854d0e" },
+                  { label: "VERWACHT DEZE MAAND", value: "€ " + totalCourtage.toLocaleString("nl-NL", { maximumFractionDigits: 0 }), sub: activeDeals.length + " actieve deals", bg: "#f0f9ff", border: "#bae6fd", color: "#0284c7" },
+                ].map((card, i) => (
+                  <div key={i} style={{ background: card.bg, border: `1px solid ${card.border}`, borderRadius: 10, padding: 14 }}>
+                    <div style={{ fontSize: 9, color: card.color, fontWeight: 600, letterSpacing: "0.08em", marginBottom: 6, textTransform: "uppercase" }}>{card.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: card.color, marginBottom: 2 }}>{card.value}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8" }}>{card.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {overdrachtDeals.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 10, color: "#94a3b8", letterSpacing: "0.1em", marginBottom: 8, textTransform: "uppercase" }}>
+                    AANKOMENDE OVERDRACHTEN
+                  </div>
+                  {overdrachtDeals.map((d, i) => {
+                    const days = d.transfer_date ? Math.ceil((new Date(d.transfer_date).getTime() - Date.now()) / 86400000) : null;
+                    const courtage = (d.agreed_price || 0) * courtage_pct;
+                    return (
+                      <div key={d.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 12, borderBottom: i < overdrachtDeals.length - 1 ? "1px solid #f8fafc" : "none", alignItems: "center" }}>
+                        <div>
+                          <span style={{ color: "#0f172a", fontWeight: 500 }}>{d.address}</span>
+                          {d.transfer_date && (
+                            <span style={{ color: "#94a3b8", marginLeft: 8 }}>
+                              {new Date(d.transfer_date).toLocaleDateString("nl-NL")}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                          <span style={{ color: "#16a34a", fontWeight: 600 }}>{"€ " + courtage.toLocaleString("nl-NL", { maximumFractionDigits: 0 })}</span>
+                          {days !== null && (
+                            <span style={{ fontSize: 11, fontWeight: 600, color: days <= 7 ? "#ef4444" : days <= 14 ? "#f97316" : "#94a3b8" }}>
+                              over {days}d
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Stats row */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e8ecf0", display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", flexShrink: 0 }}>
         {[
