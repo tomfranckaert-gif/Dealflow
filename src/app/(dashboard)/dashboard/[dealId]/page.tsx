@@ -829,7 +829,39 @@ function VerkoperSection({ deal }: { deal: DealWithContacts }) {
 
 // ─── Documenten ───────────────────────────────────────────────────────────────
 
-const DOCUMENT_TYPES = ["Koopovereenkomst", "Taxatierapport", "Energielabel", "Bouwtechnische keuring", "Eigendomsbewijs", "Hypotheekaanbod", "Overdrachtsdocument"];
+const DOCUMENT_TYPES = [
+  "Energielabel", "Plattegrond", "Foto's", "Opdracht tot dienstverlening",
+  "Lijst van zaken", "Vragenlijst", "Eigendomsakte", "Splitsingsakte",
+  "VvE documenten", "Gemeentelijke voorzieningen", "Concept koopovereenkomst",
+  "Getekend koopovereenkomst", "Hypotheekakte", "Transportakte",
+  "Wwft verificatie", "Overig",
+];
+
+const DOC_SOURCE: Record<string, string> = {
+  "Energielabel": "Realworks", "Foto's": "Zibber", "Plattegrond": "Zibber",
+  "Opdracht tot dienstverlening": "Realworks", "Lijst van zaken": "Move.nl",
+  "Vragenlijst": "Move.nl", "Eigendomsakte": "Kadaster", "Splitsingsakte": "Kadaster",
+  "VvE documenten": "Handmatig", "Gemeentelijke voorzieningen": "Handmatig",
+  "Concept koopovereenkomst": "Realworks", "Getekend koopovereenkomst": "Move.nl",
+  "Hypotheekakte": "Notaris", "Transportakte": "Notaris",
+  "Wwft verificatie": "Move.nl", "Overig": "Handmatig",
+};
+
+const STAGE_ORDER: DealStage[] = ["lead","bezichtiging","bod","koopakte","voorwaarden","financiering","overdracht","gesloten"];
+function stageAtOrAfter(current: DealStage, target: DealStage) {
+  return STAGE_ORDER.indexOf(current) >= STAGE_ORDER.indexOf(target);
+}
+
+function expectedDocsForStage(stage: DealStage): string[] {
+  const docs = ["Energielabel", "Foto's", "Plattegrond", "Opdracht tot dienstverlening"];
+  if (stageAtOrAfter(stage, "koopakte"))
+    docs.push("Lijst van zaken", "Vragenlijst", "Eigendomsakte", "Concept koopovereenkomst");
+  if (stageAtOrAfter(stage, "voorwaarden"))
+    docs.push("Getekend koopovereenkomst", "Wwft verificatie");
+  if (stageAtOrAfter(stage, "overdracht"))
+    docs.push("Hypotheekakte", "Transportakte");
+  return docs;
+}
 
 function DocumentenSection({ dealId, currentStage, onAdvanceStage }: { dealId: string; currentStage: DealStage; onAdvanceStage: (s: DealStage, msg: string) => Promise<void> }) {
   const [docs, setDocs] = useState<{ id: string; name: string; type: string; signed: boolean; created_at: string }[]>([]);
@@ -844,20 +876,21 @@ function DocumentenSection({ dealId, currentStage, onAdvanceStage }: { dealId: s
     const { data } = await supabase.from("documents").select("*").eq("deal_id", dealId).order("created_at", { ascending: false });
     const loaded = (data ?? []) as { id: string; name: string; type: string; signed: boolean; created_at: string }[];
     setDocs(loaded);
-    if (currentStage === "koopakte" && loaded.some(d => d.type === "Koopovereenkomst" && d.signed)) {
+    if (currentStage === "koopakte" && loaded.some(d => d.type === "Getekend koopovereenkomst" && d.signed)) {
       setShowVoorwaardenBanner(true);
     }
   }, [dealId, currentStage]);
 
   useEffect(() => { load(); }, [load]);
 
-  async function handleAdd() {
-    const name = docName.trim() || docType;
+  async function handleAdd(typeOverride?: string) {
+    const type = typeOverride ?? docType;
+    const name = docName.trim() || type;
     setSaving(true);
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
-    await supabase.from("documents").insert({ owner_id: user.id, deal_id: dealId, name, type: docType, signed: false });
+    await supabase.from("documents").insert({ owner_id: user.id, deal_id: dealId, name, type, signed: false });
     await load();
     setDocName(""); setShowForm(false); setSaving(false);
   }
@@ -866,7 +899,7 @@ function DocumentenSection({ dealId, currentStage, onAdvanceStage }: { dealId: s
     const supabase = createClient();
     await supabase.from("documents").update({ signed: true }).eq("id", doc.id);
     await load();
-    if (doc.type === "Koopovereenkomst" && currentStage === "koopakte") {
+    if (doc.type === "Getekend koopovereenkomst" && currentStage === "koopakte") {
       setShowVoorwaardenBanner(true);
     }
   }
@@ -888,6 +921,31 @@ function DocumentenSection({ dealId, currentStage, onAdvanceStage }: { dealId: s
     setShowVoorwaardenBanner(false);
   }
 
+  const expected = expectedDocsForStage(currentStage);
+  const completeCount = expected.filter(name => docs.some(d => d.type === name)).length;
+  const progressPct = expected.length > 0 ? Math.round((completeCount / expected.length) * 100) : 0;
+
+  function docStatus(name: string): "ontbreekt" | "ontvangen" | "ondertekend" {
+    const match = docs.find(d => d.type === name);
+    if (!match) return "ontbreekt";
+    return match.signed ? "ondertekend" : "ontvangen";
+  }
+
+  const STATUS_STYLE: Record<string, { bg: string; color: string; border: string }> = {
+    ontbreekt:  { bg: "#fef2f2", color: "#ef4444", border: "#fca5a5" },
+    ontvangen:  { bg: "#eff6ff", color: "#0284c7", border: "#bae6fd" },
+    ondertekend:{ bg: "#f0fdf4", color: "#16a34a", border: "#bbf7d0" },
+  };
+
+  const SOURCE_STYLE: Record<string, { bg: string; color: string }> = {
+    Realworks: { bg: "#f0f9ff", color: "#0284c7" },
+    "Zibber":  { bg: "#faf5ff", color: "#7c3aed" },
+    "Move.nl": { bg: "#fff7ed", color: "#f97316" },
+    Kadaster:  { bg: "#f0fdf4", color: "#16a34a" },
+    Notaris:   { bg: "#fef9c3", color: "#854d0e" },
+    Handmatig: { bg: "#f8fafc", color: "#64748b" },
+  };
+
   return (
     <SectionWrap title="Documenten">
       {showVoorwaardenBanner && (
@@ -902,19 +960,60 @@ function DocumentenSection({ dealId, currentStage, onAdvanceStage }: { dealId: s
           </div>
         </div>
       )}
+
+      {/* Progress bar */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <span style={{ fontSize: 11, color: "#64748b" }}>{completeCount} van {expected.length} documenten compleet</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#0284c7" }}>{progressPct}%</span>
+        </div>
+        <div style={{ height: 6, background: "#f1f5f9", borderRadius: 4, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${progressPct}%`, background: "#0284c7", borderRadius: 4, transition: "width 0.4s" }} />
+        </div>
+      </div>
+
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
         <button onClick={() => setShowForm(!showForm)} style={{ padding: "7px 14px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>+ Document toevoegen</button>
       </div>
+
       {showForm && (
         <Card>
           <div style={{ marginBottom: "10px" }}><label style={sectionLbl}>Type</label><select value={docType} onChange={e => setDocType(e.target.value)} style={{ ...sectionInp }}>{DOCUMENT_TYPES.map(t => <option key={t}>{t}</option>)}</select></div>
           <div style={{ marginBottom: "12px" }}><label style={sectionLbl}>Naam (optioneel)</label><input value={docName} onChange={e => setDocName(e.target.value)} placeholder={docType} style={sectionInp} /></div>
-          <button onClick={handleAdd} disabled={saving} style={{ background: "#0284c7", border: "none", borderRadius: "8px", padding: "9px 16px", fontSize: "13px", fontWeight: "600", color: "#fff", cursor: "pointer", opacity: saving ? 0.5 : 1 }}>{saving ? "Toevoegen…" : "Toevoegen"}</button>
+          <button onClick={() => handleAdd()} disabled={saving} style={{ background: "#0284c7", border: "none", borderRadius: "8px", padding: "9px 16px", fontSize: "13px", fontWeight: "600", color: "#fff", cursor: "pointer", opacity: saving ? 0.5 : 1 }}>{saving ? "Toevoegen…" : "Toevoegen"}</button>
         </Card>
       )}
-      {docs.length === 0 && !showForm ? (
-        <Card style={{ textAlign: "center", padding: "40px" }}><p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>Nog geen documenten toegevoegd</p></Card>
-      ) : docs.map(doc => (
+
+      {/* Expected document checklist */}
+      <div style={{ marginBottom: 16 }}>
+        {expected.map((name) => {
+          const status = docStatus(name);
+          const ss = STATUS_STYLE[status];
+          const source = DOC_SOURCE[name] ?? "Handmatig";
+          const src = SOURCE_STYLE[source] ?? SOURCE_STYLE["Handmatig"];
+          const uploadedDoc = docs.find(d => d.type === name);
+          return (
+            <div key={name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#fff", border: "1px solid #e8ecf0", borderRadius: 8, marginBottom: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+                <span style={{ fontSize: 13, color: "#0f172a", fontWeight: 500 }}>{name}</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <span style={{ fontSize: 10, fontWeight: 600, background: src.bg, color: src.color, borderRadius: 20, padding: "2px 8px" }}>{source}</span>
+                <span style={{ fontSize: 10, fontWeight: 600, background: ss.bg, color: ss.color, border: `1px solid ${ss.border}`, borderRadius: 20, padding: "2px 8px" }}>{status}</span>
+                {status === "ontbreekt" ? (
+                  <button onClick={() => handleAdd(name)} style={{ fontSize: 11, fontWeight: 600, color: "#0284c7", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Uploaden</button>
+                ) : !uploadedDoc?.signed ? (
+                  <button onClick={() => handleSign(uploadedDoc!)} style={{ fontSize: 11, fontWeight: 600, color: "#16a34a", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Ondertekend</button>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Additional uploaded docs not in checklist */}
+      {docs.filter(d => !expected.includes(d.type)).map(doc => (
         <Card key={doc.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
