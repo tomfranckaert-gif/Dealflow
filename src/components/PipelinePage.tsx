@@ -54,6 +54,9 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
   const alerts: Alert[] = [];
   const now = Date.now();
 
+  const daysUntil = (dateStr: string) =>
+    Math.ceil((new Date(dateStr).getTime() - now) / 86400000);
+
   for (const deal of deals) {
     const name = deal.address ?? deal.title ?? "Deal";
 
@@ -115,6 +118,49 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
           borderColor: "#0284c7",
           icon: "🔵",
         });
+      }
+    }
+
+    // Waarborgsom alert
+    if (deal.transfer_date) {
+      const stage = deal.stage?.toLowerCase();
+      if (["koopakte", "voorwaarden", "financiering"].includes(stage)) {
+        const transferDate = new Date(deal.transfer_date);
+        const waarborgsomDate = new Date(transferDate);
+        waarborgsomDate.setMonth(waarborgsomDate.getMonth() - 4);
+        const daysUntilWaarborgsom = Math.ceil((waarborgsomDate.getTime() - now) / 86400000);
+        if (daysUntilWaarborgsom <= 7 && daysUntilWaarborgsom >= -3) {
+          alerts.push({
+            id: `waarborgsom-${deal.id}`,
+            type: "deadline",
+            title: "Waarborgsom",
+            subtitle: daysUntilWaarborgsom <= 0
+              ? `${name} — controleer of gestort`
+              : `${name} — verwacht over ${daysUntilWaarborgsom} dagen`,
+            timeAgo: timeAgo(deal.created_at),
+            borderColor: daysUntilWaarborgsom <= 2 ? "#ef4444" : "#f97316",
+            icon: "🏦",
+          });
+        }
+      }
+    }
+
+    // Inspectie reminder — 14 days before transport
+    if (deal.transfer_date) {
+      const stage = deal.stage?.toLowerCase();
+      if (["financiering", "overdracht"].includes(stage)) {
+        const days = daysUntil(deal.transfer_date);
+        if (days <= 14 && days > 7) {
+          alerts.push({
+            id: `inspectie-${deal.id}`,
+            type: "actie",
+            title: "Inspectie inplannen",
+            subtitle: `${name} — transport over ${days} dagen`,
+            timeAgo: timeAgo(deal.created_at),
+            borderColor: "#f59e0b",
+            icon: "🔍",
+          });
+        }
       }
     }
   }
