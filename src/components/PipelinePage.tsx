@@ -258,7 +258,7 @@ export default function PipelinePage({ deals }: Props) {
       .filter((d) =>
         d.stage?.toLowerCase() !== "gesloten" &&
         (d.agreed_price || 0) <= searcher.budget &&
-        d.type?.toLowerCase() === searcher.type &&
+        d.property_type?.toLowerCase() === searcher.type &&
         d.city?.toLowerCase() === searcher.city.toLowerCase()
       )
       .map((deal) => ({ searcher, deal }))
