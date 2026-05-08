@@ -211,6 +211,7 @@ export default function PipelinePage({ deals }: Props) {
   const [today, setToday] = useState("");
   const [tip, setTip] = useState("");
   const [tipLoading, setTipLoading] = useState(true);
+  const [viewings, setViewings] = useState<any[]>([]);
 
   useEffect(() => {
     setToday(new Date().toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }));
@@ -221,6 +222,15 @@ export default function PipelinePage({ deals }: Props) {
         setAgentName(agent?.name || user?.email?.split("@")[0] || "Makelaar");
       });
     });
+    const todayStr = new Date().toISOString().split("T")[0];
+    const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+    supabase
+      .from("viewings")
+      .select("*, deals(*)")
+      .gte("scheduled_at", todayStr)
+      .lt("scheduled_at", tomorrowStr)
+      .order("scheduled_at", { ascending: true })
+      .then(({ data }) => setViewings(data ?? []));
   }, []);
 
   const fetchTip = async () => {
@@ -357,6 +367,44 @@ export default function PipelinePage({ deals }: Props) {
             </div>
           </div>
           <button onClick={fetchTip} style={{ background: "transparent", border: "none", color: "#94a3b8", fontSize: 18, cursor: "pointer" }}>↻</button>
+        </div>
+      </div>
+
+      {/* Agenda vandaag */}
+      <div style={{ background: "#f8fafc", padding: "16px 24px 0", flexShrink: 0 }}>
+        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em" }}>
+              AGENDA VANDAAG
+            </div>
+            <div style={{ fontSize: 11, color: "#94a3b8" }}>
+              {new Date().toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" })}
+            </div>
+          </div>
+          {viewings.length > 0 ? (
+            viewings.map((v, i) => (
+              <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: i < viewings.length - 1 ? "1px solid #f8fafc" : "none" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", width: 44, flexShrink: 0 }}>
+                  {new Date(v.scheduled_at).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}
+                </div>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: v.status === "bevestigd" ? "#16a34a" : "#f97316" }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, color: "#0f172a" }}>{v.deals?.address || "Onbekend adres"}</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>{v.status}</div>
+                </div>
+                <button
+                  onClick={() => router.push(`/dashboard/${v.deal_id}`)}
+                  style={{ fontSize: 11, color: "#0284c7", background: "transparent", border: "none", cursor: "pointer" }}
+                >
+                  Openen →
+                </button>
+              </div>
+            ))
+          ) : (
+            <div style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "12px 0" }}>
+              Geen afspraken vandaag 🎉
+            </div>
+          )}
         </div>
       </div>
 
