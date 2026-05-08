@@ -1,16 +1,23 @@
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  const { dealAddress, dealCity, recipientName, triggerEvent, agentName } = await req.json();
+  const { dealAddress, dealCity, recipientName, triggerEvent, agentName, type } = await req.json();
 
-  const parts: string[] = []
-  if (agentName) parts.push(`Je bent makelaar ${agentName}.`)
-  if (dealAddress) parts.push(`Woning: ${dealAddress}${dealCity ? ' in ' + dealCity : ''}.`)
-  if (recipientName) parts.push(`Ontvanger: ${recipientName}.`)
-  if (triggerEvent) parts.push(`Context: ${triggerEvent}.`)
-  parts.push('Schrijf een kort vriendelijk WhatsApp bericht in het Nederlands. Maximaal 3 zinnen.')
+  let content = [
+    agentName ? `Je bent makelaar ${agentName}.` : null,
+    dealAddress ? `Woning: ${dealAddress}${dealCity ? ' in ' + dealCity : ''}.` : null,
+    recipientName ? `Ontvanger: ${recipientName}.` : null,
+    triggerEvent ? `Context: ${triggerEvent}.` : null,
+    'Schrijf een kort vriendelijk WhatsApp bericht in het Nederlands. Maximaal 3 zinnen.'
+  ].filter(Boolean).join(' ')
 
-  const prompt = parts.join(' ')
+  if (type === 'daily-tip') {
+    content = 'Je bent een ervaren Nederlandse makelaar. Geef één concrete tip voor vandaag. Maximaal 2 zinnen. Direct en praktisch.'
+  }
+
+  if (!content) {
+    return NextResponse.json({ message: 'Goedemorgen! Veel succes vandaag.' })
+  }
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -25,7 +32,7 @@ export async function POST(req: Request) {
       messages: [
         {
           role: "user",
-          content: prompt,
+          content,
         },
       ],
     }),
