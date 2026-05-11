@@ -54,14 +54,16 @@ function getGreeting() {
 
 interface Alert {
   id: string;
-  type: "deadline" | "actie" | "update" | "stale";
+  type: "deadline" | "actie" | "update" | "stale" | "wwft" | "overdracht";
   title: string;
   subtitle: string;
   timeAgo: string;
   borderColor: string;
   icon: string;
-  deal?: { id: string };
+  deal?: { id: string; address?: string | null; city?: string | null };
   action?: string;
+  daysLeft?: number;
+  cta: string;
 }
 
 function getAlertUrl(alert: Alert): string {
@@ -82,11 +84,12 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
   const alerts: Alert[] = [];
   const now = Date.now();
 
-  const daysUntil = (dateStr: string) =>
+  const daysUntilFn = (dateStr: string) =>
     Math.ceil((new Date(dateStr).getTime() - now) / 86400000);
 
   for (const deal of deals) {
     const name = deal.address ?? deal.title ?? "Deal";
+    const dealRef = { id: deal.id, address: deal.address, city: deal.city };
 
     // Voorwaarden + transfer_date deadline alerts
     if (deal.stage === "voorwaarden" && deal.transfer_date) {
@@ -95,13 +98,15 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
         alerts.push({
           id: `deadline-${deal.id}`,
           type: "deadline",
-          title: "Deadline nadert",
-          subtitle: `${name} — nog ${daysLeft === 0 ? "vandaag" : `${daysLeft} dag${daysLeft === 1 ? "" : "en"}`}`,
+          title: "Voorwaarden vervallen binnenkort",
+          subtitle: `Controleer en verwerk alle ontbindende voorwaarden`,
           timeAgo: timeAgo(deal.created_at),
           borderColor: "#ef4444",
           icon: "🔴",
-          deal: { id: deal.id },
+          deal: dealRef,
           action: "voorwaarden",
+          daysLeft,
+          cta: "Voorwaarden bekijken",
         });
         continue;
       }
@@ -109,13 +114,15 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
         alerts.push({
           id: `actie-${deal.id}`,
           type: "actie",
-          title: "Actie vereist",
-          subtitle: `${name} — voorwaarden vervallen over ${daysLeft} dagen`,
+          title: `Voorwaarden verlopen over ${daysLeft} dagen`,
+          subtitle: `Zorg dat alle ontbindende voorwaarden zijn afgehandeld`,
           timeAgo: timeAgo(deal.created_at),
           borderColor: "#f59e0b",
           icon: "🟡",
-          deal: { id: deal.id },
+          deal: dealRef,
           action: "voorwaarden",
+          daysLeft,
+          cta: "Voorwaarden afhandelen",
         });
         continue;
       }
@@ -128,13 +135,14 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
         alerts.push({
           id: `vw-stale-${deal.id}`,
           type: "actie",
-          title: "Actie vereist",
-          subtitle: `${name} staat al ${daysIn} dagen in Voorwaarden`,
+          title: "Voorwaarden al lang open",
+          subtitle: `Deal staat al ${daysIn} dagen in fase Voorwaarden`,
           timeAgo: timeAgo(deal.created_at),
           borderColor: "#f59e0b",
           icon: "🟡",
-          deal: { id: deal.id },
+          deal: dealRef,
           action: "voorwaarden",
+          cta: "Voorwaarden verwerken",
         });
       }
     }
@@ -146,13 +154,14 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
         alerts.push({
           id: `stale-${deal.id}`,
           type: "update",
-          title: "Deal update",
-          subtitle: `${name} — geen activiteit in ${daysSinceActivity} dagen`,
+          title: "Geen activiteit",
+          subtitle: `Laatste activiteit ${daysSinceActivity} dagen geleden — neem contact op`,
           timeAgo: timeAgo(deal.created_at),
           borderColor: "#0284c7",
           icon: "🔵",
-          deal: { id: deal.id },
+          deal: dealRef,
           action: "whatsapp",
+          cta: "WhatsApp sturen",
         });
       }
     }
@@ -169,15 +178,17 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
           alerts.push({
             id: `waarborgsom-${deal.id}`,
             type: "deadline",
-            title: "Waarborgsom",
+            title: daysUntilWaarborgsom <= 0 ? "Waarborgsom — controleer betaling" : "Waarborgsom verwacht",
             subtitle: daysUntilWaarborgsom <= 0
-              ? `${name} — controleer of gestort`
-              : `${name} — verwacht over ${daysUntilWaarborgsom} dagen`,
+              ? `Controleer of de waarborgsom is gestort`
+              : `Verwacht over ${daysUntilWaarborgsom} dagen`,
             timeAgo: timeAgo(deal.created_at),
             borderColor: daysUntilWaarborgsom <= 2 ? "#ef4444" : "#f97316",
             icon: "🏦",
-            deal: { id: deal.id },
+            deal: dealRef,
             action: "documents",
+            daysLeft: daysUntilWaarborgsom > 0 ? daysUntilWaarborgsom : 0,
+            cta: "Documenten bekijken",
           });
         }
       }
@@ -187,21 +198,55 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
     if (deal.transfer_date) {
       const stage = deal.stage?.toLowerCase();
       if (["financiering", "overdracht"].includes(stage)) {
-        const days = daysUntil(deal.transfer_date);
+        const days = daysUntilFn(deal.transfer_date);
         if (days <= 14 && days > 7) {
           alerts.push({
             id: `inspectie-${deal.id}`,
             type: "actie",
             title: "Inspectie inplannen",
-            subtitle: `${name} — transport over ${days} dagen`,
+            subtitle: `Transport over ${days} dagen — plan de pre-oplevering in`,
             timeAgo: timeAgo(deal.created_at),
             borderColor: "#f59e0b",
             icon: "🔍",
-            deal: { id: deal.id },
+            deal: dealRef,
             action: "transfer",
+            daysLeft: days,
+            cta: "Overdracht plannen",
           });
         }
       }
+    }
+
+    // Wwft incomplete — flag all koopakte+ deals
+    if (["koopakte", "voorwaarden", "financiering", "overdracht"].includes(deal.stage?.toLowerCase() ?? "")) {
+      alerts.push({
+        id: `wwft-${deal.id}`,
+        type: "wwft",
+        title: "Wwft dossier controleren",
+        subtitle: `Identiteitsverificatie vereist voor koopakte fase`,
+        timeAgo: timeAgo(deal.created_at),
+        borderColor: "#7c3aed",
+        icon: "🛡",
+        deal: dealRef,
+        action: "wwft",
+        cta: "Wwft invullen",
+      });
+    }
+
+    // Overdracht without transfer_date
+    if (deal.stage?.toLowerCase() === "overdracht" && !deal.transfer_date) {
+      alerts.push({
+        id: `transfer-missing-${deal.id}`,
+        type: "overdracht",
+        title: "Overdrachtsdatum niet ingesteld",
+        subtitle: `Stel datum in om de notaris te kunnen informeren`,
+        timeAgo: timeAgo(deal.created_at),
+        borderColor: "#f97316",
+        icon: "📅",
+        deal: dealRef,
+        action: "transfer",
+        cta: "Datum instellen",
+      });
     }
   }
 
@@ -623,6 +668,63 @@ export default function PipelinePage({ deals }: Props) {
                   </div>
                 ))
               )
+            )}
+          </div>
+        </div>
+
+        {/* KRITIEK alerts */}
+        <div style={{ background: "#f8fafc", padding: "0 24px" }}>
+          <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", marginBottom: 12, color: alerts.length > 0 ? "#ef4444" : "#16a34a" }}>
+              {alerts.length > 0 ? `KRITIEK — ${alerts.length} ACTIE${alerts.length === 1 ? "" : "S"} VEREIST` : "KRITIEK — ALLES OP SCHEMA"}
+            </div>
+            {alerts.length === 0 ? (
+              <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "14px 20px", display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 20 }}>✅</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#16a34a" }}>Alles op schema</div>
+                  <div style={{ fontSize: 11, color: "#16a34a", opacity: 0.8 }}>Geen urgente acties voor vandaag</div>
+                </div>
+              </div>
+            ) : (
+              alerts.map((alert) => {
+                const base = `/dashboard/${alert.deal?.id}`;
+                const sectionParam = alert.action === "voorwaarden" ? "voorwaarden"
+                  : alert.action === "wwft" ? "wwft"
+                  : alert.action === "documents" ? "documenten"
+                  : alert.action === "transfer" ? "overdracht"
+                  : alert.action === "whatsapp" ? "whatsapp"
+                  : "";
+                const href = alert.deal?.id ? (sectionParam ? `${base}?section=${sectionParam}` : base) : "/dashboard";
+                return (
+                  <div
+                    key={alert.id}
+                    onClick={() => router.push(href)}
+                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderLeft: `4px solid ${alert.borderColor}`, background: "#fff", border: `1px solid #e8ecf0`, borderRadius: 8, marginBottom: 6, cursor: "pointer", transition: "all 0.15s" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#fafafa"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.06)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.boxShadow = "none"; }}
+                  >
+                    <span style={{ fontSize: 20, flexShrink: 0 }}>{alert.icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginBottom: 2 }}>{alert.title}</div>
+                      <div style={{ fontSize: 11, color: "#64748b" }}>
+                        {alert.deal?.address ?? ""}{alert.deal?.city ? ` · ${alert.deal.city}` : ""}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{alert.subtitle}</div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+                      {alert.daysLeft !== undefined && (
+                        <div style={{ fontSize: 11, fontWeight: 700, color: alert.daysLeft <= 1 ? "#ef4444" : alert.daysLeft <= 3 ? "#f97316" : "#eab308", background: alert.daysLeft <= 1 ? "#fef2f2" : alert.daysLeft <= 3 ? "#fff7ed" : "#fefce8", padding: "2px 8px", borderRadius: 20 }}>
+                          {alert.daysLeft <= 0 ? "VERLOPEN" : alert.daysLeft === 1 ? "Morgen" : `${alert.daysLeft} dagen`}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 11, fontWeight: 600, color: alert.borderColor, background: `${alert.borderColor}18`, border: `1px solid ${alert.borderColor}30`, padding: "4px 10px", borderRadius: 6, whiteSpace: "nowrap" }}>
+                        {alert.cta} →
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
