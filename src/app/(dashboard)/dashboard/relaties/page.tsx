@@ -9,6 +9,7 @@ interface ContactRow {
   name: string | null;
   phone: string | null;
   email: string | null;
+  partner_name: string | null;
 }
 
 interface Deal {
@@ -28,21 +29,12 @@ interface ContactCard {
   name: string;
   phone: string | null;
   email: string | null;
+  partnerName: string | null;
   role: "Koper" | "Verkoper";
   dealId: string;
   dealAddress: string;
   stage: string;
   closedAt: string;
-}
-
-const AVATAR_COLORS = [
-  "#0284c7", "#7c3aed", "#16a34a", "#f97316", "#dc2626",
-  "#0891b2", "#9333ea", "#15803d", "#ea580c", "#0f172a",
-];
-
-function avatarColor(name: string): string {
-  const sum = name.split("").reduce((s, c) => s + c.charCodeAt(0), 0);
-  return AVATAR_COLORS[sum % AVATAR_COLORS.length];
 }
 
 function initials(name: string): string {
@@ -77,6 +69,7 @@ function dealsToCards(deals: Deal[]): ContactCard[] {
         name: deal.buyer.name,
         phone: deal.buyer.phone,
         email: deal.buyer.email,
+        partnerName: deal.buyer.partner_name,
         role: "Koper",
         dealId: deal.id,
         dealAddress: addr,
@@ -91,6 +84,7 @@ function dealsToCards(deals: Deal[]): ContactCard[] {
         name: deal.seller.name,
         phone: deal.seller.phone,
         email: deal.seller.email,
+        partnerName: deal.seller.partner_name,
         role: "Verkoper",
         dealId: deal.id,
         dealAddress: addr,
@@ -102,8 +96,8 @@ function dealsToCards(deals: Deal[]): ContactCard[] {
   return cards;
 }
 
-function Avatar({ name }: { name: string }) {
-  const color = avatarColor(name);
+function Avatar({ name, role }: { name: string; role: "Koper" | "Verkoper" }) {
+  const color = role === "Koper" ? "#0284c7" : "#7c3aed";
   return (
     <div style={{
       width: 44, height: 44, borderRadius: "50%", background: color,
@@ -160,10 +154,13 @@ function ContactCard({
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         {/* Left: avatar + info */}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flex: 1, minWidth: 0 }}>
-          <Avatar name={card.name} />
+          <Avatar name={card.name} role={card.role} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{card.name}</span>
+              {card.partnerName && (
+                <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 400 }}>& {card.partnerName}</span>
+              )}
               <RolePill role={card.role} />
             </div>
             <div
@@ -178,8 +175,13 @@ function ContactCard({
             {card.phone && (
               <div style={{ fontSize: 11, color: "#94a3b8" }}>{card.phone}</div>
             )}
+            {isClosed && (
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+                Gesloten op {formatDate(card.closedAt)}
+              </div>
+            )}
             {isClosed && jub && (
-              <div style={{ marginTop: 6, fontSize: 11, color: daysToJub !== null && daysToJub <= 30 ? "#f97316" : "#94a3b8" }}>
+              <div style={{ marginTop: 4, fontSize: 11, color: daysToJub !== null && daysToJub <= 30 ? "#f97316" : "#94a3b8" }}>
                 🎉 Jubileum: {formatShort(jub)}
                 {daysToJub !== null && daysToJub > 0 && daysToJub <= 30 && (
                   <span style={{ marginLeft: 6, fontWeight: 600, color: "#f97316" }}>over {daysToJub} dagen</span>
@@ -258,8 +260,8 @@ export default function RelatiesPage() {
       .from("deals")
       .select(`
         id, address, title, stage, created_at, updated_at,
-        buyer:contacts!deals_buyer_id_fkey(id, name, phone, email),
-        seller:contacts!deals_seller_id_fkey(id, name, phone, email)
+        buyer:contacts!deals_buyer_id_fkey(id, name, phone, email, partner_name),
+        seller:contacts!deals_seller_id_fkey(id, name, phone, email, partner_name)
       `)
       .eq("owner_id", user.id)
       .order("created_at", { ascending: false });
@@ -343,9 +345,9 @@ export default function RelatiesPage() {
         {/* Stats row */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
           {[
-            { label: "Totale relaties",  value: totalContacts, sub: "Unieke contacten",   accent: "#0284c7" },
-            { label: "Actieve klanten",  value: activeDeals,   sub: "Lopende deals",      accent: "#16a34a" },
-            { label: "Vorige klanten",   value: closedDeals,   sub: "Gesloten deals",     accent: "#7c3aed" },
+            { label: "Totaal contacten", value: totalContacts, sub: "Unieke contacten", accent: "#0284c7" },
+            { label: "Actief",           value: activeDeals,   sub: "Lopende deals",    accent: "#16a34a" },
+            { label: "Gesloten",         value: closedDeals,   sub: "Gesloten deals",   accent: "#7c3aed" },
           ].map((s) => (
             <div key={s.label} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px" }}>
               <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 6 }}>{s.label}</div>
