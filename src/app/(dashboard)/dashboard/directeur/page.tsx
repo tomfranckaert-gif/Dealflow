@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Deal } from "@/types/database";
 
@@ -77,6 +78,7 @@ const tdStyle: React.CSSProperties = {
 };
 
 export default function DirecteurPage() {
+  const router = useRouter();
   const [deals, setDeals]     = useState<Deal[]>([]);
   const [viewings, setViewings] = useState<Viewing[]>([]);
   const [loading, setLoading]  = useState(true);
@@ -136,13 +138,23 @@ export default function DirecteurPage() {
         ───────────────────────────────────────────── */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 16 }}>
           {[
-            { label: "Actieve deals",     value: deals.length,        sub: "open trajecten",       accent: "#0284c7" },
-            { label: "Pipeline waarde",   value: fmt(totalValue),     sub: "totale verkoopwaarde", accent: "#7c3aed" },
-            { label: "Courtage (1,5%)",   value: fmt(totalCourtage),  sub: "verwachte omzet",      accent: "#16a34a" },
-            { label: "Voorwaarden deals", value: voorwaarden,         sub: "actiepunten vandaag",  accent: voorwaarden > 0 ? "#dc2626" : "#64748b" },
-            { label: "Gem. health",       value: "85%",               sub: "kantoorscore",         accent: "#f97316" },
-          ].map(({ label, value, sub, accent }) => (
-            <div key={label} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 18px" }}>
+            { label: "Actieve deals",     value: deals.length,        sub: "open trajecten",       accent: "#0284c7", href: "/dashboard" },
+            { label: "Pipeline waarde",   value: fmt(totalValue),     sub: "totale verkoopwaarde", accent: "#7c3aed", href: null },
+            { label: "Courtage (1,5%)",   value: fmt(totalCourtage),  sub: "verwachte omzet",      accent: "#16a34a", href: null },
+            { label: "Voorwaarden deals", value: voorwaarden,         sub: "actiepunten vandaag",  accent: voorwaarden > 0 ? "#dc2626" : "#64748b", href: "/dashboard?filter=Voorwaarden" },
+            { label: "Gem. health",       value: "85%",               sub: "kantoorscore",         accent: "#f97316", href: null },
+          ].map(({ label, value, sub, accent, href }) => (
+            <div
+              key={label}
+              onClick={() => href && router.push(href)}
+              style={{
+                background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 18px",
+                cursor: href ? "pointer" : "default",
+                transition: "box-shadow 0.15s, border-color 0.15s",
+              }}
+              onMouseEnter={(e) => { if (href) { e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.07)"; e.currentTarget.style.borderColor = "#cbd5e1"; } }}
+              onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = "#e8ecf0"; }}
+            >
               <div style={{ fontSize: 22, fontWeight: 700, color: accent, lineHeight: 1 }}>{value}</div>
               <div style={{ fontSize: 12, fontWeight: 600, color: "#0f172a", marginTop: 6 }}>{label}</div>
               <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{sub}</div>
@@ -170,7 +182,13 @@ export default function DirecteurPage() {
                 const pct   = Math.round((md.length / maxDeals) * 100);
                 const hl    = healthLabel(md.length);
                 return (
-                  <tr key={member.id}>
+                  <tr
+                    key={member.id}
+                    onClick={() => router.push(`/dashboard/directeur/makelaar/${member.id}`)}
+                    style={{ cursor: "pointer" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
                     <td style={tdStyle}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <div style={{ width: 30, height: 30, borderRadius: "50%", background: member.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
@@ -279,15 +297,19 @@ export default function DirecteurPage() {
           <div style={sectionLabel}>Pipeline Distributie</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {STAGES.map(({ key, label, color }) => {
+              const totalDeals = deals.length || 1;
               const count = deals.filter(d => d.stage === key).length;
-              const pct   = deals.length > 0 ? Math.round((count / deals.length) * 100) : 0;
+              const pct   = Math.round((count / totalDeals) * 100);
               return (
                 <div key={key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ width: 96, fontSize: 12, color: "#64748b", fontWeight: 500, flexShrink: 0 }}>{label}</div>
                   <div style={{ flex: 1, background: "#f1f5f9", borderRadius: 6, height: 10, overflow: "hidden" }}>
                     <div style={{ width: `${pct}%`, background: color, borderRadius: 6, height: 10 }} />
                   </div>
-                  <div style={{ width: 22, fontSize: 12, fontWeight: 700, color: "#0f172a", textAlign: "right", flexShrink: 0 }}>{count}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a" }}>{count}</span>
+                    <span style={{ fontSize: 11, color: "#94a3b8" }}>deals · {pct}%</span>
+                  </div>
                 </div>
               );
             })}
