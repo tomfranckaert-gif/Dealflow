@@ -336,6 +336,7 @@ export default function PipelinePage({ deals }: Props) {
   const [tip, setTip] = useState("");
   const [tipLoading, setTipLoading] = useState(true);
   const [viewings, setViewings] = useState<any[]>([]);
+  const [jubileaOpen, setJubileaOpen] = useState(true);
 
   useEffect(() => {
     setToday(new Date().toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }));
@@ -456,7 +457,8 @@ export default function PipelinePage({ deals }: Props) {
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      {/* Page header */}
+
+      {/* Page header — fixed */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e8ecf0", padding: "16px 24px", flexShrink: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
@@ -560,153 +562,13 @@ export default function PipelinePage({ deals }: Props) {
         </div>
       </div>
 
-      {/* Verjaardagen & Jubilea */}
-      <div style={{ background: "#f8fafc", padding: "16px 24px 0", flexShrink: 0 }}>
-        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em", marginBottom: 12 }}>
-            🎂 VERJAARDAGEN &amp; JUBILEA
-          </div>
-          {allEvents.length === 0 ? (
-            <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>
-              Geen verjaardagen of jubilea vandaag
-            </div>
-          ) : (
-            allEvents.map((event, i) => (
-              <div
-                key={`${event.type}-${event.deal.id}`}
-                onClick={() => router.push(`/dashboard/${event.deal.id}`)}
-                style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: i < allEvents.length - 1 ? "1px solid #f8fafc" : "none", cursor: "pointer", borderRadius: 6, transition: "background 0.1s" }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#fafafa"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-              >
-                <span style={{ fontSize: 20, flexShrink: 0 }}>{event.icon}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{event.name}</div>
-                  <div style={{ fontSize: 11, color: "#94a3b8" }}>{event.text}</div>
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/${event.deal.id}?section=whatsapp`); }}
-                  style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, background: "#f5f3ff", border: "1px solid #ddd6fe", color: "#7c3aed", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
-                >
-                  Stuur bericht
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Agenda vandaag */}
-      <div style={{ background: "#f8fafc", padding: "16px 24px 0", flexShrink: 0 }}>
-        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em" }}>
-              AGENDA VANDAAG
-            </div>
-            <div style={{ fontSize: 11, color: "#94a3b8" }}>
-              {new Date().toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" })}
-            </div>
-          </div>
-          {viewings.length > 0 ? (
-            viewings.map((v, i) => (
-              <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: i < viewings.length - 1 ? "1px solid #f8fafc" : "none" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", width: 44, flexShrink: 0 }}>
-                  {new Date(v.scheduled_at).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}
-                </div>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: v.status === "bevestigd" ? "#16a34a" : "#f97316" }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, color: "#0f172a" }}>{v.deals?.address || "Onbekend adres"}</div>
-                  <div style={{ fontSize: 11, color: "#94a3b8" }}>{v.status}</div>
-                </div>
-                <button
-                  onClick={() => router.push(`/dashboard/${v.deal_id}`)}
-                  style={{ fontSize: 11, color: "#0284c7", background: "transparent", border: "none", cursor: "pointer" }}
-                >
-                  Openen →
-                </button>
-              </div>
-            ))
-          ) : (
-            <div style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "12px 0" }}>
-              Geen afspraken vandaag 🎉
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Financieel overzicht */}
-      {(() => {
-        const courtage_pct = 0.015;
-        const overdrachtDeals = deals.filter((d) => d.stage?.toLowerCase() === "overdracht");
-        const totalCourtage = deals
-          .filter((d) => d.stage?.toLowerCase() !== "gesloten")
-          .reduce((sum, d) => sum + ((d.agreed_price || 0) * courtage_pct), 0);
-        const overdrachtCourtage = overdrachtDeals.reduce((sum, d) => sum + ((d.agreed_price || 0) * courtage_pct), 0);
-        const activeDeals = deals.filter((d) => d.stage?.toLowerCase() !== "gesloten");
-        return (
-          <div style={{ background: "#f8fafc", padding: "0 24px", flexShrink: 0 }}>
-            <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16 }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em", marginBottom: 14 }}>
-                FINANCIEEL OVERZICHT
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
-                {[
-                  { label: "OVERDRACHTEN", value: overdrachtDeals.length.toString(), sub: "€ " + overdrachtCourtage.toLocaleString("nl-NL", { maximumFractionDigits: 0 }) + " verwacht", bg: "#f0fdf4", border: "#bbf7d0", color: "#16a34a" },
-                  { label: "OPENSTAANDE FACTUREN", value: "€ 0", sub: "Gesynchroniseerd via WeFact", bg: "#fef9c3", border: "#fde047", color: "#854d0e" },
-                  { label: "VERWACHT DEZE MAAND", value: "€ " + totalCourtage.toLocaleString("nl-NL", { maximumFractionDigits: 0 }), sub: activeDeals.length + " actieve deals", bg: "#f0f9ff", border: "#bae6fd", color: "#0284c7" },
-                ].map((card, i) => (
-                  <div key={i} style={{ background: card.bg, border: `1px solid ${card.border}`, borderRadius: 10, padding: 14 }}>
-                    <div style={{ fontSize: 9, color: card.color, fontWeight: 600, letterSpacing: "0.08em", marginBottom: 6, textTransform: "uppercase" }}>{card.label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: card.color, marginBottom: 2 }}>{card.value}</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8" }}>{card.sub}</div>
-                  </div>
-                ))}
-              </div>
-
-              {overdrachtDeals.length > 0 && (
-                <div>
-                  <div style={{ fontSize: 10, color: "#94a3b8", letterSpacing: "0.1em", marginBottom: 8, textTransform: "uppercase" }}>
-                    AANKOMENDE OVERDRACHTEN
-                  </div>
-                  {overdrachtDeals.map((d, i) => {
-                    const days = d.transfer_date ? Math.ceil((new Date(d.transfer_date).getTime() - Date.now()) / 86400000) : null;
-                    const courtage = (d.agreed_price || 0) * courtage_pct;
-                    return (
-                      <div key={d.id} onClick={() => router.push(`/dashboard/${d.id}`)} style={{ display: "flex", justifyContent: "space-between", padding: "8px 6px", fontSize: 12, borderBottom: i < overdrachtDeals.length - 1 ? "1px solid #f8fafc" : "none", alignItems: "center", cursor: "pointer", borderRadius: 6, transition: "background 0.1s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f0fdf4"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                        <div>
-                          <span style={{ color: "#0f172a", fontWeight: 500 }}>{d.address}</span>
-                          {d.transfer_date && (
-                            <span style={{ color: "#94a3b8", marginLeft: 8 }}>
-                              {new Date(d.transfer_date).toLocaleDateString("nl-NL")}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                          <span style={{ color: "#16a34a", fontWeight: 600 }}>{"€ " + courtage.toLocaleString("nl-NL", { maximumFractionDigits: 0 })}</span>
-                          {days !== null && (
-                            <span style={{ fontSize: 11, fontWeight: 600, color: days <= 7 ? "#ef4444" : days <= 14 ? "#f97316" : "#94a3b8" }}>
-                              over {days}d
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Stats row */}
+      {/* Stats row — fixed below topbar */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e8ecf0", display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", flexShrink: 0 }}>
         {[
-          { label: "Actieve deals",    value: activeCount,             sub: "In behandeling" },
-          { label: "Pipeline waarde",  value: formatEuro(totalValue),  sub: "Excl. gesloten" },
-          { label: "Gesloten",         value: wonCount,                sub: "Dit jaar" },
-          { label: "Urgente deadlines",value: urgentCount,             sub: "Binnen 7 dagen" },
+          { label: "Actieve deals",     value: activeCount,            sub: "In behandeling" },
+          { label: "Pipeline waarde",   value: formatEuro(totalValue), sub: "Excl. gesloten" },
+          { label: "Gesloten",          value: wonCount,               sub: "Dit jaar" },
+          { label: "Urgente deadlines", value: urgentCount,            sub: "Binnen 7 dagen" },
         ].map((s, i) => (
           <div key={s.label} style={{ padding: "16px 24px", borderRight: i < 3 ? "1px solid #e8ecf0" : "none" }}>
             <div style={{ fontSize: "11px", fontWeight: "500", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>{s.label}</div>
@@ -716,107 +578,253 @@ export default function PipelinePage({ deals }: Props) {
         ))}
       </div>
 
-      {/* Content */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          {/* Filter pills */}
-          <div style={{ padding: "12px 16px", background: "#fff", borderBottom: "1px solid #e8ecf0", display: "flex", gap: "6px", overflowX: "auto", flexShrink: 0 }}>
-            {[{ id: "alle", label: "Alle", count: deals.length }, ...STAGES.map((s) => ({ id: s.id, label: s.label, count: deals.filter((d) => d.stage === s.id).length }))].map((f) => {
-              const active = activeFilter === f.id;
-              return (
-                <button
-                  key={f.id}
-                  onClick={() => setActiveFilter(f.id as DealStage | "alle")}
-                  style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "5px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: active ? "600" : "400", color: active ? "#0284c7" : "#64748b", background: active ? "#f0f9ff" : "#f8fafc", border: active ? "1px solid #0284c7" : "1px solid #e8ecf0", cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.1s" }}
-                >
-                  {f.label}
-                  <span style={{ fontSize: "11px", color: active ? "#0284c7" : "#94a3b8" }}>{f.count}</span>
-                </button>
-              );
-            })}
-          </div>
+      {/* Scrollable content — everything below topbar + stats row */}
+      <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
 
-          {/* Deal list */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
-            {filtered.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "60px 24px" }}>
-                {search ? (
-                  <>
-                    <p style={{ fontSize: "14px", color: "#94a3b8", marginBottom: "16px" }}>
-                      Geen deals gevonden voor &lsquo;{search}&rsquo;
-                    </p>
-                    <button
-                      onClick={() => setSearch("")}
-                      style={{ background: "#f8fafc", border: "1px solid #e8ecf0", color: "#64748b", borderRadius: "8px", padding: "8px 14px", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}
-                    >
-                      ✕ Zoekopdracht wissen
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p style={{ fontSize: "14px", color: "#94a3b8", marginBottom: "16px" }}>Nog geen deals — maak je eerste deal aan</p>
-                    <Link href="/dashboard/new-deal" style={{ background: "#0284c7", color: "#fff", borderRadius: "8px", padding: "8px 14px", fontSize: "13px", fontWeight: "600", textDecoration: "none" }}>
-                      + Nieuwe deal aanmaken
-                    </Link>
-                  </>
-                )}
+        {/* Verjaardagen & Jubilea */}
+        <div style={{ background: "#f8fafc", padding: "16px 24px 0" }}>
+          <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: jubileaOpen ? 12 : 0 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em" }}>
+                🎂 VERJAARDAGEN &amp; JUBILEA
               </div>
-            ) : (
-              filtered.map((deal) => (
-                <DealCard
-                  key={deal.id}
-                  deal={deal}
-                  onClick={() => router.push(`/dashboard/${deal.id}`)}
-                />
-              ))
-            )}
-
-            {/* Match alerts */}
-            <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16, marginTop: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em" }}>MATCH ALERTS</div>
-                <div style={{ fontSize: 11, background: "#f5f3ff", color: "#7c3aed", border: "1px solid #ddd6fe", borderRadius: 20, padding: "2px 10px" }}>
-                  {matches.length} matches
+              <button
+                onClick={() => setJubileaOpen(!jubileaOpen)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 18, lineHeight: 1, padding: "0 4px" }}
+              >
+                {jubileaOpen ? "−" : "+"}
+              </button>
+            </div>
+            {jubileaOpen && (
+              allEvents.length === 0 ? (
+                <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>
+                  Geen verjaardagen of jubilea vandaag
                 </div>
-              </div>
+              ) : (
+                allEvents.map((event, i) => (
+                  <div
+                    key={`${event.type}-${event.deal.id}`}
+                    onClick={() => router.push(`/dashboard/${event.deal.id}`)}
+                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: i < allEvents.length - 1 ? "1px solid #f8fafc" : "none", cursor: "pointer", borderRadius: 6, transition: "background 0.1s" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#fafafa"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <span style={{ fontSize: 20, flexShrink: 0 }}>{event.icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{event.name}</div>
+                      <div style={{ fontSize: 11, color: "#94a3b8" }}>{event.text}</div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/${event.deal.id}?section=whatsapp`); }}
+                      style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, background: "#f5f3ff", border: "1px solid #ddd6fe", color: "#7c3aed", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+                    >
+                      Stuur bericht
+                    </button>
+                  </div>
+                ))
+              )
+            )}
+          </div>
+        </div>
 
-              {matches.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {matches.map((m, i) => (
-                    <div key={i} style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 8, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginBottom: 2 }}>{m.searcher.name}</div>
-                        <div style={{ fontSize: 11, color: "#94a3b8" }}>{"zoekt " + m.searcher.type + " tot € " + m.searcher.budget.toLocaleString("nl-NL")}</div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: "#7c3aed", marginBottom: 6 }}>{m.deal.address}</div>
-                        <button
-                          onClick={() => {
-                            const msg = encodeURIComponent(
-                              `Goedemorgen ${m.searcher.name.split(" ")[0]}! 👋\n\nIk heb een woning die perfect bij jou past:\n\n📍 ${m.deal.address}${m.deal.city ? `, ${m.deal.city}` : ""}\n💶 ${m.deal.agreed_price ? "€ " + m.deal.agreed_price.toLocaleString("nl-NL") : "Prijs op aanvraag"}\n🏠 ${m.deal.property_type ?? ""}\n\nHeb je interesse in een bezichtiging?`
-                            );
-                            window.open(`https://wa.me/?text=${msg}`, "_blank");
-                          }}
-                          style={{ fontSize: 11, fontWeight: 600, color: "#7c3aed", background: "#fff", border: "1px solid #ddd6fe", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}
-                        >
-                          WhatsApp sturen
-                        </button>
-                      </div>
+        {/* Agenda vandaag */}
+        <div style={{ background: "#f8fafc", padding: "0 24px" }}>
+          <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em" }}>
+                AGENDA VANDAAG
+              </div>
+              <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                {new Date().toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" })}
+              </div>
+            </div>
+            {viewings.length > 0 ? (
+              viewings.map((v, i) => (
+                <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: i < viewings.length - 1 ? "1px solid #f8fafc" : "none" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", width: 44, flexShrink: 0 }}>
+                    {new Date(v.scheduled_at).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}
+                  </div>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: v.status === "bevestigd" ? "#16a34a" : "#f97316" }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, color: "#0f172a" }}>{v.deals?.address || "Onbekend adres"}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8" }}>{v.status}</div>
+                  </div>
+                  <button
+                    onClick={() => router.push(`/dashboard/${v.deal_id}`)}
+                    style={{ fontSize: 11, color: "#0284c7", background: "transparent", border: "none", cursor: "pointer" }}
+                  >
+                    Openen →
+                  </button>
+                </div>
+              ))
+            ) : (
+              <div style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "12px 0" }}>
+                Geen afspraken vandaag 🎉
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Financieel overzicht */}
+        {(() => {
+          const courtage_pct = 0.015;
+          const overdrachtDeals = deals.filter((d) => d.stage?.toLowerCase() === "overdracht");
+          const totalCourtage = deals
+            .filter((d) => d.stage?.toLowerCase() !== "gesloten")
+            .reduce((sum, d) => sum + ((d.agreed_price || 0) * courtage_pct), 0);
+          const overdrachtCourtage = overdrachtDeals.reduce((sum, d) => sum + ((d.agreed_price || 0) * courtage_pct), 0);
+          const activeDeals = deals.filter((d) => d.stage?.toLowerCase() !== "gesloten");
+          return (
+            <div style={{ background: "#f8fafc", padding: "0 24px" }}>
+              <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em", marginBottom: 14 }}>
+                  FINANCIEEL OVERZICHT
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 16 }}>
+                  {[
+                    { label: "OVERDRACHTEN", value: overdrachtDeals.length.toString(), sub: "€ " + overdrachtCourtage.toLocaleString("nl-NL", { maximumFractionDigits: 0 }) + " verwacht", bg: "#f0fdf4", border: "#bbf7d0", color: "#16a34a" },
+                    { label: "OPENSTAANDE FACTUREN", value: "€ 0", sub: "Gesynchroniseerd via WeFact", bg: "#fef9c3", border: "#fde047", color: "#854d0e" },
+                    { label: "VERWACHT DEZE MAAND", value: "€ " + totalCourtage.toLocaleString("nl-NL", { maximumFractionDigits: 0 }), sub: activeDeals.length + " actieve deals", bg: "#f0f9ff", border: "#bae6fd", color: "#0284c7" },
+                  ].map((card, i) => (
+                    <div key={i} style={{ background: card.bg, border: `1px solid ${card.border}`, borderRadius: 10, padding: 14 }}>
+                      <div style={{ fontSize: 9, color: card.color, fontWeight: 600, letterSpacing: "0.08em", marginBottom: 6, textTransform: "uppercase" }}>{card.label}</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: card.color, marginBottom: 2 }}>{card.value}</div>
+                      <div style={{ fontSize: 11, color: "#94a3b8" }}>{card.sub}</div>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>
-                  Geen matches op dit moment
-                </div>
-              )}
-
-              <div style={{ fontSize: 10, color: "#94a3b8", fontStyle: "italic", marginTop: 12 }}>
-                Zoekopdrachten worden gesynchroniseerd via Realworks koppeling
+                {overdrachtDeals.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, color: "#94a3b8", letterSpacing: "0.1em", marginBottom: 8, textTransform: "uppercase" }}>
+                      AANKOMENDE OVERDRACHTEN
+                    </div>
+                    {overdrachtDeals.map((d, i) => {
+                      const days = d.transfer_date ? Math.ceil((new Date(d.transfer_date).getTime() - Date.now()) / 86400000) : null;
+                      const courtage = (d.agreed_price || 0) * courtage_pct;
+                      return (
+                        <div key={d.id} onClick={() => router.push(`/dashboard/${d.id}`)} style={{ display: "flex", justifyContent: "space-between", padding: "8px 6px", fontSize: 12, borderBottom: i < overdrachtDeals.length - 1 ? "1px solid #f8fafc" : "none", alignItems: "center", cursor: "pointer", borderRadius: 6, transition: "background 0.1s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f0fdf4"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                          <div>
+                            <span style={{ color: "#0f172a", fontWeight: 500 }}>{d.address}</span>
+                            {d.transfer_date && (
+                              <span style={{ color: "#94a3b8", marginLeft: 8 }}>
+                                {new Date(d.transfer_date).toLocaleDateString("nl-NL")}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                            <span style={{ color: "#16a34a", fontWeight: 600 }}>{"€ " + courtage.toLocaleString("nl-NL", { maximumFractionDigits: 0 })}</span>
+                            {days !== null && (
+                              <span style={{ fontSize: 11, fontWeight: 600, color: days <= 7 ? "#ef4444" : days <= 14 ? "#f97316" : "#94a3b8" }}>
+                                over {days}d
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
+            </div>
+          );
+        })()}
+
+        {/* Filter pills — sticky within scroll container */}
+        <div style={{ position: "sticky", top: 0, zIndex: 10, padding: "12px 16px", background: "#fff", borderBottom: "1px solid #e8ecf0", display: "flex", gap: "6px", overflowX: "auto" }}>
+          {[{ id: "alle", label: "Alle", count: deals.length }, ...STAGES.map((s) => ({ id: s.id, label: s.label, count: deals.filter((d) => d.stage === s.id).length }))].map((f) => {
+            const active = activeFilter === f.id;
+            return (
+              <button
+                key={f.id}
+                onClick={() => setActiveFilter(f.id as DealStage | "alle")}
+                style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "5px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: active ? "600" : "400", color: active ? "#0284c7" : "#64748b", background: active ? "#f0f9ff" : "#f8fafc", border: active ? "1px solid #0284c7" : "1px solid #e8ecf0", cursor: "pointer", whiteSpace: "nowrap", transition: "all 0.1s" }}
+              >
+                {f.label}
+                <span style={{ fontSize: "11px", color: active ? "#0284c7" : "#94a3b8" }}>{f.count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Deal list */}
+        <div style={{ padding: "12px 16px" }}>
+          {filtered.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "60px 24px" }}>
+              {search ? (
+                <>
+                  <p style={{ fontSize: "14px", color: "#94a3b8", marginBottom: "16px" }}>
+                    Geen deals gevonden voor &lsquo;{search}&rsquo;
+                  </p>
+                  <button
+                    onClick={() => setSearch("")}
+                    style={{ background: "#f8fafc", border: "1px solid #e8ecf0", color: "#64748b", borderRadius: "8px", padding: "8px 14px", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}
+                  >
+                    ✕ Zoekopdracht wissen
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: "14px", color: "#94a3b8", marginBottom: "16px" }}>Nog geen deals — maak je eerste deal aan</p>
+                  <Link href="/dashboard/new-deal" style={{ background: "#0284c7", color: "#fff", borderRadius: "8px", padding: "8px 14px", fontSize: "13px", fontWeight: "600", textDecoration: "none" }}>
+                    + Nieuwe deal aanmaken
+                  </Link>
+                </>
+              )}
+            </div>
+          ) : (
+            filtered.map((deal) => (
+              <DealCard
+                key={deal.id}
+                deal={deal}
+                onClick={() => router.push(`/dashboard/${deal.id}`)}
+              />
+            ))
+          )}
+
+          {/* Match alerts */}
+          <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16, marginTop: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em" }}>MATCH ALERTS</div>
+              <div style={{ fontSize: 11, background: "#f5f3ff", color: "#7c3aed", border: "1px solid #ddd6fe", borderRadius: 20, padding: "2px 10px" }}>
+                {matches.length} matches
+              </div>
+            </div>
+            {matches.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {matches.map((m, i) => (
+                  <div key={i} style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 8, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", marginBottom: 2 }}>{m.searcher.name}</div>
+                      <div style={{ fontSize: 11, color: "#94a3b8" }}>{"zoekt " + m.searcher.type + " tot € " + m.searcher.budget.toLocaleString("nl-NL")}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#7c3aed", marginBottom: 6 }}>{m.deal.address}</div>
+                      <button
+                        onClick={() => {
+                          const msg = encodeURIComponent(
+                            `Goedemorgen ${m.searcher.name.split(" ")[0]}! 👋\n\nIk heb een woning die perfect bij jou past:\n\n📍 ${m.deal.address}${m.deal.city ? `, ${m.deal.city}` : ""}\n💶 ${m.deal.agreed_price ? "€ " + m.deal.agreed_price.toLocaleString("nl-NL") : "Prijs op aanvraag"}\n🏠 ${m.deal.property_type ?? ""}\n\nHeb je interesse in een bezichtiging?`
+                          );
+                          window.open(`https://wa.me/?text=${msg}`, "_blank");
+                        }}
+                        style={{ fontSize: 11, fontWeight: 600, color: "#7c3aed", background: "#fff", border: "1px solid #ddd6fe", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}
+                      >
+                        WhatsApp sturen
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>
+                Geen matches op dit moment
+              </div>
+            )}
+            <div style={{ fontSize: 10, color: "#94a3b8", fontStyle: "italic", marginTop: 12 }}>
+              Zoekopdrachten worden gesynchroniseerd via Realworks koppeling
             </div>
           </div>
         </div>
+
       </div>
     </div>
   );
