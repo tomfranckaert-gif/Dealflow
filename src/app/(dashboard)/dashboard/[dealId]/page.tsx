@@ -490,7 +490,96 @@ const STATUS_BADGE: Record<string, { bg: string; color: string; label: string }>
   mislukt:   { bg: "#fee2e2", color: "#991b1b", label: "Mislukt" },
 };
 
+function DealMessageCard({ msg, recipients, onRefresh }: {
+  msg: Message;
+  recipients: { id: string; name: string; label: string }[];
+  onRefresh: () => void;
+}) {
+  const recipient = recipients.find((r) => r.id === msg.contact_id);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(msg.content);
+  const [approving, setApproving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const isPending = msg.status === "concept";
+
+  async function handleApprove() {
+    setApproving(true);
+    const supabase = createClient();
+    await supabase.from("messages").update({ status: "verzonden", sent_at: new Date().toISOString() }).eq("id", msg.id);
+    setApproving(false);
+    setDone(true);
+    setTimeout(() => onRefresh(), 1600);
+  }
+
+  async function handleSaveEdit() {
+    const supabase = createClient();
+    await supabase.from("messages").update({ content: editText }).eq("id", msg.id);
+    setEditing(false);
+    onRefresh();
+  }
+
+  async function handleDelete() {
+    const supabase = createClient();
+    await supabase.from("messages").delete().eq("id", msg.id);
+    onRefresh();
+  }
+
+  const badge = STATUS_BADGE[msg.status] ?? STATUS_BADGE.concept;
+
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${isPending ? "#e8ecf0" : "#e8ecf0"}`, borderLeft: `4px solid ${isPending ? "#f59e0b" : "#16a34a"}`, borderRadius: "12px", padding: "14px 16px", marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{recipient?.name ?? "Onbekend"}</div>
+          {msg.trigger_event && <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>{msg.trigger_event}</div>}
+        </div>
+        <span style={{ padding: "3px 8px", borderRadius: "20px", fontSize: "11px", fontWeight: "600", background: badge.bg, color: badge.color, flexShrink: 0 }}>{badge.label}</span>
+      </div>
+
+      {editing ? (
+        <div style={{ marginBottom: 8 }}>
+          <textarea
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            style={{ width: "100%", padding: "10px 14px", border: "1px solid #0284c7", borderRadius: 10, fontSize: "12px", color: "#0f172a", resize: "vertical", minHeight: 70, boxSizing: "border-box", outline: "none", fontFamily: "DM Sans, Helvetica Neue, sans-serif", lineHeight: 1.5 }}
+          />
+          <button onClick={handleSaveEdit} style={{ marginTop: 6, padding: "5px 12px", background: "#0284c7", color: "#fff", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Opslaan</button>
+        </div>
+      ) : (
+        <div style={{ background: "#dcfce7", borderRadius: "4px 12px 12px 12px", padding: "10px 14px", fontSize: "12px", color: "#0f172a", maxWidth: "85%", lineHeight: "1.5", marginBottom: isPending ? 10 : 0 }}>
+          {editText}
+        </div>
+      )}
+
+      {confirming && (
+        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", margin: "8px 0" }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#dc2626", marginBottom: 8 }}>Weet je zeker dat je dit bericht wilt verwijderen?</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={handleDelete} style={{ padding: "4px 10px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Ja, verwijderen</button>
+            <button onClick={() => setConfirming(false)} style={{ padding: "4px 10px", background: "#fff", color: "#64748b", border: "1px solid #e8ecf0", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Annuleren</button>
+          </div>
+        </div>
+      )}
+
+      {isPending && !done && (
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={handleApprove} disabled={approving} style={{ padding: "7px 14px", background: "#16a34a", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: approving ? 0.7 : 1 }}>
+            {approving ? "Versturen…" : "✓ Goedkeuren"}
+          </button>
+          <button onClick={() => { setEditing(!editing); setConfirming(false); }} style={{ padding: "7px 14px", background: "#fff", color: "#64748b", border: "1px solid #e8ecf0", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>✏️ Aanpassen</button>
+          <button onClick={() => { setConfirming(true); setEditing(false); }} style={{ padding: "7px 14px", background: "#fff", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>✗ Verwijderen</button>
+        </div>
+      )}
+      {done && (
+        <div style={{ fontSize: 12, color: "#16a34a", fontWeight: 600, marginTop: 4 }}>✓ Verstuurd!</div>
+      )}
+    </div>
+  );
+}
+
 function WhatsAppSection({ deal, dealId }: { deal: DealWithContacts; dealId: string }) {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [showCompose, setShowCompose] = useState(false);
   const [recipientId, setRecipientId] = useState("");
@@ -580,7 +669,12 @@ function WhatsAppSection({ deal, dealId }: { deal: DealWithContacts; dealId: str
 
       {/* 1. Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
-        <span style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>WhatsApp</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>WhatsApp</span>
+          <button onClick={() => router.push("/dashboard/whatsapp")} style={{ background: "none", border: "none", fontSize: 12, color: "#0284c7", fontWeight: 600, cursor: "pointer", padding: 0 }}>
+            Naar inbox →
+          </button>
+        </div>
         <button onClick={() => setShowCompose(!showCompose)} style={{ padding: "7px 14px", background: "#0284c7", border: "none", borderRadius: "8px", color: "#fff", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
           + Bericht opstellen
         </button>
@@ -633,27 +727,10 @@ function WhatsAppSection({ deal, dealId }: { deal: DealWithContacts; dealId: str
           </button>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          {messages.map((msg) => {
-            const badge = STATUS_BADGE[msg.status] ?? STATUS_BADGE.concept;
-            const recipient = recipients.find((r) => r.id === msg.contact_id);
-            return (
-              <div key={msg.id} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px 16px" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "8px" }}>
-                  <div>
-                    <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{recipient?.name ?? "Onbekend"}</div>
-                    {msg.trigger_event && <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>{msg.trigger_event}</div>}
-                  </div>
-                  <span style={{ padding: "3px 8px", borderRadius: "20px", fontSize: "11px", fontWeight: "600", background: badge.bg, color: badge.color, flexShrink: 0 }}>{badge.label}</span>
-                </div>
-
-                {/* WhatsApp bubble */}
-                <div style={{ background: "#dcfce7", borderRadius: "4px 12px 12px 12px", padding: "10px 14px", fontSize: "12px", color: "#0f172a", maxWidth: "85%", lineHeight: "1.5" }}>
-                  {msg.content}
-                </div>
-              </div>
-            );
-          })}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {messages.map((msg) => (
+            <DealMessageCard key={msg.id} msg={msg} recipients={recipients} onRefresh={loadMessages} />
+          ))}
         </div>
       )}
     </div>

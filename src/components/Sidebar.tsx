@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -109,6 +110,22 @@ const NAV = [
 
 export default function Sidebar({ userEmail, agentName }: { userEmail: string; agentName?: string | null }) {
   const pathname = usePathname();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    async function fetchPending() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { count } = await supabase
+        .from("messages")
+        .select("*", { count: "exact", head: true })
+        .eq("owner_id", user.id)
+        .eq("status", "concept");
+      setPendingCount(count ?? 0);
+    }
+    fetchPending();
+  }, []);
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -144,6 +161,7 @@ export default function Sidebar({ userEmail, agentName }: { userEmail: string; a
       <nav style={{ flex: 1, padding: "12px 10px", overflowY: "auto" }}>
         {NAV.map((item) => {
           const active = pathname === item.href;
+          const isWhatsApp = item.href === "/dashboard/whatsapp";
           return (
             <Link
               key={item.href}
@@ -161,10 +179,22 @@ export default function Sidebar({ userEmail, agentName }: { userEmail: string; a
                 textDecoration: "none",
                 marginBottom: "2px",
                 transition: "background 0.1s, color 0.1s",
+                position: "relative",
               }}
             >
               <span style={{ color: active ? "#0284c7" : "#94a3b8", display: "flex" }}>{item.icon}</span>
               {item.label}
+              {isWhatsApp && pendingCount > 0 && (
+                <span style={{
+                  position: "absolute", top: 6, right: 6,
+                  width: 18, height: 18, borderRadius: "50%",
+                  background: "#ef4444", color: "#fff",
+                  fontSize: 10, fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {pendingCount > 9 ? "9+" : pendingCount}
+                </span>
+              )}
             </Link>
           );
         })}
