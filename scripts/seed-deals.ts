@@ -4,9 +4,17 @@ import * as path from 'path'
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') })
 
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+if (!serviceKey) {
+  console.error('❌  SUPABASE_SERVICE_ROLE_KEY ontbreekt in .env.local')
+  console.error('   Supabase dashboard → Settings → API → service_role key')
+  process.exit(1)
+}
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  serviceKey,
+  { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
 const stages = [
@@ -130,6 +138,7 @@ async function seed() {
 
   for (let i = 0; i < 99; i++) {
     const city = random(cities)
+    const stage = random(stages)
     const streetNum = randomInt(1, 180)
 
     // Create seller contact
@@ -182,7 +191,7 @@ async function seed() {
         notary_name: random(notaries),
         transfer_date: futureDate(180),
         notes: null,
-        company: null,
+        company: '',
         value: null,
         contact_name: null,
         contact_email: null,
