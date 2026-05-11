@@ -110,6 +110,11 @@ function futureDate(daysAhead: number) {
   return date.toISOString().split('T')[0]
 }
 
+function randomLetters() {
+  return String.fromCharCode(randomInt(65, 90)) +
+         String.fromCharCode(randomInt(65, 90))
+}
+
 async function seed() {
   // Try session auth first, fall back to SEED_OWNER_ID env var
   const { data: { user } } = await supabase.auth.getUser()
@@ -125,11 +130,6 @@ async function seed() {
 
   for (let i = 0; i < 99; i++) {
     const city = random(cities)
-    const stage = random(stages)
-    const askingPrice = randomPrice()
-    const agreedPrice = (stage === 'lead' || stage === 'bezichtiging')
-      ? null
-      : askingPrice - randomInt(0, 15000)
     const streetNum = randomInt(1, 180)
 
     // Create seller contact
@@ -167,22 +167,25 @@ async function seed() {
       .from('deals')
       .insert({
         owner_id: ownerId,
+        title: `${random(streets)} ${streetNum}, ${city.name}`,
         address: `${random(streets)} ${streetNum}`,
-        postcode: `${city.postcode} ${String.fromCharCode(randomInt(65, 90))}${String.fromCharCode(randomInt(65, 90))}`,
+        postcode: `${city.postcode} ${randomLetters()}`,
         city: city.name,
         property_type: random(types),
-        stage,
-        asking_price: askingPrice,
-        agreed_price: agreedPrice,
-        seller_id: seller?.id ?? null,
-        buyer_id: buyer?.id ?? null,
-        notary_name: (stage === 'overdracht' || stage === 'gesloten') ? random(notaries) : null,
-        transfer_date: stage === 'overdracht'
-          ? futureDate(30)
-          : stage === 'gesloten'
-            ? futureDate(10)
-            : null,
-        created_at: randomDate(90),
+        stage: random(stages),
+        asking_price: randomPrice(),
+        agreed_price: randomPrice(),
+        surface: randomInt(65, 280),
+        rooms: randomInt(3, 8),
+        seller_id: seller?.id || null,
+        buyer_id: buyer?.id || null,
+        notary_name: random(notaries),
+        transfer_date: futureDate(180),
+        notes: null,
+        company: null,
+        value: null,
+        contact_name: null,
+        contact_email: null,
       })
       .select()
       .single()
