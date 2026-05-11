@@ -16,7 +16,7 @@ const NAV = [
     ),
   },
   {
-    href: "/dashboard/stats",
+    href: "/dashboard/statistieken",
     label: "Statistieken",
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
