@@ -583,7 +583,7 @@ export default function PipelinePage({ deals }: Props) {
                     const days = d.transfer_date ? Math.ceil((new Date(d.transfer_date).getTime() - Date.now()) / 86400000) : null;
                     const courtage = (d.agreed_price || 0) * courtage_pct;
                     return (
-                      <div key={d.id} onClick={() => router.push()} style={{ display: "flex", justifyContent: "space-between", padding: "8px 6px", fontSize: 12, borderBottom: i < overdrachtDeals.length - 1 ? "1px solid #f8fafc" : "none", alignItems: "center", cursor: "pointer", borderRadius: 6, transition: "background 0.1s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f0fdf4"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                      <div key={d.id} onClick={() => router.push(`/dashboard/${d.id}`)} style={{ display: "flex", justifyContent: "space-between", padding: "8px 6px", fontSize: 12, borderBottom: i < overdrachtDeals.length - 1 ? "1px solid #f8fafc" : "none", alignItems: "center", cursor: "pointer", borderRadius: 6, transition: "background 0.1s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f0fdf4"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
                         <div>
                           <span style={{ color: "#0f172a", fontWeight: 500 }}>{d.address}</span>
                           {d.transfer_date && (
