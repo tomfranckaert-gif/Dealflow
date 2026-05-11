@@ -169,6 +169,8 @@ function WwftSection({ deal, dealId }: { deal: DealWithContacts; dealId: string 
   const [sellerMockVerified, setSellerMockVerified] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(false);
+  const [reminderSent, setReminderSent] = useState<Set<string>>(new Set());
+  const [reminderToast, setReminderToast] = useState(false);
 
   const loadEntries = useCallback(async () => {
     const supabase = createClient();
@@ -190,6 +192,27 @@ function WwftSection({ deal, dealId }: { deal: DealWithContacts; dealId: string 
   const currentContactId = activeParty === "buyer" ? deal.buyer_id : deal.seller_id;
   const mockVerified = activeParty === "buyer" ? buyerMockVerified : sellerMockVerified;
   const setMockVerified = activeParty === "buyer" ? setBuyerMockVerified : setSellerMockVerified;
+
+  async function handleReminder() {
+    if (!currentContactId || !currentContact) return;
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const agentName = user.user_metadata?.full_name ?? user.email?.split("@")[0] ?? "uw makelaar";
+    await supabase.from("messages").insert({
+      owner_id: user.id,
+      deal_id: dealId,
+      contact_id: currentContactId,
+      channel: "whatsapp",
+      content: `Hi ${currentContact.name}, je hebt nog een verificatieverzoek openstaan via Move.nl voor ${deal.address ?? "uw woning"}. Kun je dit zo snel mogelijk afronden? — ${agentName}`,
+      status: "concept",
+      trigger_event: "Wwft herinnering",
+      scheduled_at: null,
+    });
+    setReminderSent((prev) => new Set(prev).add(currentContactId));
+    setReminderToast(true);
+    setTimeout(() => setReminderToast(false), 3000);
+  }
 
   const compliant = buyerMockVerified && sellerMockVerified && !!buyerEntry && !!sellerEntry;
   const showsHypotheek = ["Hypotheek", "Combinatie"].includes(currentForm.financing_type);
@@ -295,6 +318,13 @@ function WwftSection({ deal, dealId }: { deal: DealWithContacts; dealId: string 
           </div>
         </div>
 
+        {/* Reminder toast */}
+        {reminderToast && (
+          <div style={{ position: "fixed", bottom: 24, right: 24, background: "#0f172a", color: "#fff", padding: "12px 18px", borderRadius: 10, fontSize: 13, fontWeight: 600, zIndex: 999, boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}>
+            Herinnering aangemaakt in WhatsApp inbox ✓
+          </div>
+        )}
+
         {/* Verification status */}
         {!mockVerified ? (
           <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: "8px", padding: "12px 14px", marginBottom: "10px" }}>
@@ -307,6 +337,23 @@ function WwftSection({ deal, dealId }: { deal: DealWithContacts; dealId: string 
             >
               Opnieuw versturen
             </button>
+            <button
+              onClick={handleReminder}
+              disabled={currentContactId ? reminderSent.has(currentContactId) : false}
+              style={{
+                display: "block", marginTop: 10,
+                padding: "6px 14px", background: "#f0f9ff", border: "1px solid #bae6fd",
+                borderRadius: "6px", fontSize: "11px", color: "#0284c7",
+                cursor: currentContactId && reminderSent.has(currentContactId) ? "default" : "pointer",
+                fontWeight: 600, opacity: currentContactId && reminderSent.has(currentContactId) ? 0.6 : 1,
+                fontFamily: "DM Sans, Helvetica Neue, sans-serif",
+              }}
+            >
+              {currentContactId && reminderSent.has(currentContactId) ? "✓ Herinnering aangemaakt" : "Herinnering sturen"}
+            </button>
+            <div style={{ marginTop: 6, fontSize: 10, color: "#94a3b8", fontStyle: "italic" }}>
+              Automatische herinnering wordt verstuurd na 3 dagen geen actie
+            </div>
           </div>
         ) : (
           <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "12px 14px", marginBottom: "10px" }}>
