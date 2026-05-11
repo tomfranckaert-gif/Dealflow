@@ -91,6 +91,7 @@ const SUB_NAV: { id: SubNav; label: string; icon: React.ReactNode }[] = [
 interface WwftEntry {
   id: string;
   contact_id: string;
+  created_at: string;
   risk_score: "laag" | "middel" | "hoog";
   pep_check: boolean;
   sanctions_check: boolean;
@@ -374,6 +375,53 @@ function WwftSection({ deal, dealId }: { deal: DealWithContacts; dealId: string 
             <div style={{ fontSize: "10px", color: "#94a3b8", fontStyle: "italic" }}>(ontvangen via Move.nl)</div>
           </div>
         )}
+
+        {/* Date timeline */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10, padding: "10px 12px", background: "#f8fafc", borderRadius: 8, fontSize: 11 }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "#94a3b8" }}>📤 Verificatieverzoek verstuurd</span>
+            <span style={{ color: "#0f172a", fontWeight: 500 }}>
+              {currentEntry?.created_at
+                ? new Date(currentEntry.created_at).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })
+                : deal.created_at
+                ? new Date(deal.created_at).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })
+                : "Onbekend"}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "#94a3b8" }}>⏰ Deadline verificatie</span>
+            <span style={{ fontWeight: 600, color: (() => {
+              const deadline = new Date(deal.created_at);
+              deadline.setDate(deadline.getDate() + 14);
+              const days = Math.ceil((deadline.getTime() - Date.now()) / 86400000);
+              return days <= 3 ? "#ef4444" : days <= 7 ? "#f97316" : "#0f172a";
+            })() }}>
+              {(() => {
+                const deadline = new Date(deal.created_at);
+                deadline.setDate(deadline.getDate() + 14);
+                const days = Math.ceil((deadline.getTime() - Date.now()) / 86400000);
+                const formatted = deadline.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
+                return days <= 0 ? `${formatted} — VERLOPEN` : days === 1 ? `${formatted} — morgen!` : `${formatted} — over ${days} dagen`;
+              })()}
+            </span>
+          </div>
+          {currentEntry?.verified_at && (
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#94a3b8" }}>✓ Geverifieerd op</span>
+              <span style={{ color: "#16a34a", fontWeight: 600 }}>
+                {new Date(currentEntry.verified_at).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })}
+              </span>
+            </div>
+          )}
+          {currentEntry?.retention_until && (
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#94a3b8" }}>🔒 Bewaartermijn t/m</span>
+              <span style={{ color: "#64748b" }}>
+                {new Date(currentEntry.retention_until).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })}
+              </span>
+            </div>
+          )}
+        </div>
 
         {/* Demo toggle */}
         <button
