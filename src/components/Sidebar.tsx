@@ -4,7 +4,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { useRole } from "@/hooks/useRole";
 
 const NAV = [
   {
@@ -37,7 +36,6 @@ const NAV = [
   {
     href: "/dashboard/directeur",
     label: "Kantoor",
-    role: "directeur",
     icon: (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -111,7 +109,6 @@ const NAV = [
 
 export default function Sidebar({ userEmail, agentName }: { userEmail: string; agentName?: string | null }) {
   const pathname = usePathname();
-  const role = useRole();
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -145,7 +142,7 @@ export default function Sidebar({ userEmail, agentName }: { userEmail: string; a
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: "12px 10px", overflowY: "auto" }}>
-        {NAV.filter((item) => !("role" in item) || item.role === role).map((item) => {
+        {NAV.map((item) => {
           const active = pathname === item.href;
           return (
             <Link
