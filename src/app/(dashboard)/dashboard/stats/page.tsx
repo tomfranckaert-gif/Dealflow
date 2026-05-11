@@ -107,12 +107,6 @@ export default function StatsPage() {
     { id: "jaar",     label: "Dit jaar" },
   ];
 
-  const PERIODS: { id: Period; label: string }[] = [
-    { id: "maand",    label: "Deze maand" },
-    { id: "kwartaal", label: "Dit kwartaal" },
-    { id: "jaar",     label: "Dit jaar" },
-  ];
-
   if (loading) {
     return (
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
