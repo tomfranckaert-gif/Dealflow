@@ -44,6 +44,14 @@ function timeAgo(d: string) {
   return `${Math.floor(diff / 1440)}d geleden`;
 }
 
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 7 && hour < 12) return "Goedemorgen";
+  if (hour >= 12 && hour <= 17) return "Goedemiddag";
+  if (hour >= 18 && hour <= 23) return "Goedenavond";
+  return "Goedenacht";
+}
+
 interface Alert {
   id: string;
   type: "deadline" | "actie" | "update" | "stale";
@@ -400,6 +408,52 @@ export default function PipelinePage({ deals }: Props) {
   const wonCount = deals.filter((d) => d.stage === "gesloten").length;
   const urgentCount = deals.filter(isUrgent).length;
 
+  const greeting = getGreeting();
+
+  const jubilea = deals
+    .filter((d) => d.stage === "gesloten")
+    .filter((d) => {
+      if (!d.created_at) return false;
+      const closed = new Date(d.created_at);
+      const today = new Date();
+      return today.getMonth() === closed.getMonth() && today.getDate() === closed.getDate();
+    })
+    .map((d) => ({
+      type: "jubileum" as const,
+      icon: "🏠",
+      name: d.title || d.address || "Deal",
+      text: `${new Date().getFullYear() - new Date(d.created_at).getFullYear()} jaar geleden verkocht`,
+      deal: d,
+      color: "#7c3aed",
+    }));
+
+  const upcomingJubilea = deals
+    .filter((d) => d.stage === "gesloten")
+    .filter((d) => {
+      if (!d.created_at) return false;
+      const closed = new Date(d.created_at);
+      const today = new Date();
+      const thisYear = new Date(today.getFullYear(), closed.getMonth(), closed.getDate());
+      const diff = Math.ceil((thisYear.getTime() - today.getTime()) / 86400000);
+      return diff > 0 && diff <= 7;
+    })
+    .map((d) => {
+      const closed = new Date(d.created_at);
+      const today = new Date();
+      const thisYear = new Date(today.getFullYear(), closed.getMonth(), closed.getDate());
+      const daysLeft = Math.ceil((thisYear.getTime() - Date.now()) / 86400000);
+      return {
+        type: "jubileum_upcoming" as const,
+        icon: "📅",
+        name: d.address || d.title || "Deal",
+        text: `Jubileum over ${daysLeft} dagen`,
+        deal: d,
+        color: "#7c3aed",
+      };
+    });
+
+  const allEvents = [...jubilea, ...upcomingJubilea];
+
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Page header */}
@@ -407,7 +461,7 @@ export default function PipelinePage({ deals }: Props) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
             <div style={{ fontSize: 24, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.5px" }}>
-              Goedemorgen, {agentName} 👋
+              {greeting}, {agentName} 👋
             </div>
             <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 4, textTransform: "capitalize" }}>
               {today}
@@ -503,6 +557,42 @@ export default function PipelinePage({ deals }: Props) {
             </div>
           </div>
           <button onClick={fetchTip} style={{ background: "transparent", border: "none", color: "#94a3b8", fontSize: 18, cursor: "pointer" }}>↻</button>
+        </div>
+      </div>
+
+      {/* Verjaardagen & Jubilea */}
+      <div style={{ background: "#f8fafc", padding: "16px 24px 0", flexShrink: 0 }}>
+        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", letterSpacing: "0.15em", marginBottom: 12 }}>
+            🎂 VERJAARDAGEN &amp; JUBILEA
+          </div>
+          {allEvents.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>
+              Geen verjaardagen of jubilea vandaag
+            </div>
+          ) : (
+            allEvents.map((event, i) => (
+              <div
+                key={`${event.type}-${event.deal.id}`}
+                onClick={() => router.push(`/dashboard/${event.deal.id}`)}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: i < allEvents.length - 1 ? "1px solid #f8fafc" : "none", cursor: "pointer", borderRadius: 6, transition: "background 0.1s" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#fafafa"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
+                <span style={{ fontSize: 20, flexShrink: 0 }}>{event.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{event.name}</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>{event.text}</div>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/${event.deal.id}?section=whatsapp`); }}
+                  style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, background: "#f5f3ff", border: "1px solid #ddd6fe", color: "#7c3aed", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+                >
+                  Stuur bericht
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
