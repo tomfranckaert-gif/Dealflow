@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { DealWithContacts, DealStage } from "@/types/database";
 import { dealClosedEmail } from "@/lib/email-templates";
@@ -1956,11 +1956,17 @@ function FundaSection({ deal }: { deal: DealWithContacts }) {
 export default function DealDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dealId = params.dealId as string;
 
   const [deal, setDeal] = useState<DealWithContacts | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeNav, setActiveNav] = useState<SubNav>("overzicht");
+
+  useEffect(() => {
+    const section = searchParams.get("section") as SubNav | null;
+    if (section) setActiveNav(section);
+  }, [searchParams]);
   const [currentStage, setCurrentStage] = useState<DealStage>("lead");
   const [stageDropdownOpen, setStageDropdownOpen] = useState(false);
   const [stageToast, setStageToast] = useState("");

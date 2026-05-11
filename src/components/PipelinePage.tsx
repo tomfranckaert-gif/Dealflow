@@ -48,6 +48,22 @@ interface Alert {
   timeAgo: string;
   borderColor: string;
   icon: string;
+  deal?: { id: string };
+  action?: string;
+}
+
+function getAlertUrl(alert: Alert): string {
+  if (!alert.deal?.id) return "/dashboard";
+  const base = `/dashboard/${alert.deal.id}`;
+  switch (alert.action) {
+    case "whatsapp":    return `${base}?section=whatsapp`;
+    case "voorwaarden": return `${base}?section=voorwaarden`;
+    case "wwft":        return `${base}?section=wwft`;
+    case "documents":   return `${base}?section=documenten`;
+    case "transfer":    return `${base}?section=overdracht`;
+    case "deal":
+    default:            return base;
+  }
 }
 
 function buildAlerts(deals: DealWithContacts[]): Alert[] {
@@ -72,6 +88,8 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
           timeAgo: timeAgo(deal.created_at),
           borderColor: "#ef4444",
           icon: "🔴",
+          deal: { id: deal.id },
+          action: "voorwaarden",
         });
         continue;
       }
@@ -84,6 +102,8 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
           timeAgo: timeAgo(deal.created_at),
           borderColor: "#f59e0b",
           icon: "🟡",
+          deal: { id: deal.id },
+          action: "voorwaarden",
         });
         continue;
       }
@@ -101,6 +121,8 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
           timeAgo: timeAgo(deal.created_at),
           borderColor: "#f59e0b",
           icon: "🟡",
+          deal: { id: deal.id },
+          action: "voorwaarden",
         });
       }
     }
@@ -117,6 +139,8 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
           timeAgo: timeAgo(deal.created_at),
           borderColor: "#0284c7",
           icon: "🔵",
+          deal: { id: deal.id },
+          action: "whatsapp",
         });
       }
     }
@@ -140,6 +164,8 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
             timeAgo: timeAgo(deal.created_at),
             borderColor: daysUntilWaarborgsom <= 2 ? "#ef4444" : "#f97316",
             icon: "🏦",
+            deal: { id: deal.id },
+            action: "documents",
           });
         }
       }
@@ -159,6 +185,8 @@ function buildAlerts(deals: DealWithContacts[]): Alert[] {
             timeAgo: timeAgo(deal.created_at),
             borderColor: "#f59e0b",
             icon: "🔍",
+            deal: { id: deal.id },
+            action: "transfer",
           });
         }
       }
@@ -391,7 +419,10 @@ export default function PipelinePage({ deals }: Props) {
                         {alerts.map((alert) => (
                           <div
                             key={alert.id}
-                            style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "12px 16px", borderLeft: `3px solid ${alert.borderColor}`, borderBottom: "1px solid #f8fafc" }}
+                            onClick={() => { router.push(getAlertUrl(alert)); setBellOpen(false); }}
+                            style={{ display: "flex", alignItems: "flex-start", gap: "10px", padding: "12px 16px", borderLeft: `3px solid ${alert.borderColor}`, borderBottom: "1px solid #f8fafc", cursor: "pointer", transition: "background 0.1s" }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                           >
                             <span style={{ fontSize: "14px", flexShrink: 0, marginTop: "1px" }}>{alert.icon}</span>
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -629,9 +660,10 @@ export default function PipelinePage({ deals }: Props) {
                         <div style={{ fontSize: 12, fontWeight: 600, color: "#7c3aed", marginBottom: 6 }}>{m.deal.address}</div>
                         <button
                           onClick={() => {
-                            const phone = "";
-                            const msg = encodeURIComponent(`Hi ${m.searcher.name}, ik heb een woning die perfect bij je past: ${m.deal.address}. Interesse om te bezichtigen?`);
-                            window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+                            const msg = encodeURIComponent(
+                              `Goedemorgen ${m.searcher.name.split(" ")[0]}! 👋\n\nIk heb een woning die perfect bij jou past:\n\n📍 ${m.deal.address}${m.deal.city ? `, ${m.deal.city}` : ""}\n💶 ${m.deal.agreed_price ? "€ " + m.deal.agreed_price.toLocaleString("nl-NL") : "Prijs op aanvraag"}\n🏠 ${m.deal.property_type ?? ""}\n\nHeb je interesse in een bezichtiging?`
+                            );
+                            window.open(`https://wa.me/?text=${msg}`, "_blank");
                           }}
                           style={{ fontSize: 11, fontWeight: 600, color: "#7c3aed", background: "#fff", border: "1px solid #ddd6fe", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}
                         >
