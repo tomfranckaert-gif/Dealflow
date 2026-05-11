@@ -109,6 +109,19 @@ export default function InstellingenPage() {
     setTimeout(() => setToast(""), 3000);
   }
 
+  async function handleTestDigest() {
+    const res = await fetch("/api/digest", {
+      method: "POST",
+      headers: { authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET ?? ""}` },
+    });
+    if (res.ok) {
+      setToast(`Email verstuurd naar ${email} ✓`);
+    } else {
+      setToast("Versturen mislukt — controleer CRON_SECRET");
+    }
+    setTimeout(() => setToast(""), 3000);
+  }
+
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {toast && (
@@ -169,6 +182,22 @@ export default function InstellingenPage() {
             ))}
             <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "8px", padding: "10px 14px", fontSize: "12px", color: "#0369a1" }}>
               API sleutels worden versleuteld opgeslagen en nooit gedeeld.
+            </div>
+          </Section>
+
+          {/* Daily digest */}
+          <Section title="Dag e-mail digest" subtitle="Ontvang elke ochtend om 07:00 een overzicht van je dag">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: "13px", fontWeight: "500", color: "#0f172a" }}>Ochtend digest</div>
+                <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>Urgente acties, agenda, courtage en openstaande berichten</div>
+              </div>
+              <button
+                onClick={handleTestDigest}
+                style={{ padding: "8px 16px", background: "#fff", border: "1px solid #e8ecf0", borderRadius: "8px", fontSize: "12px", fontWeight: "600", color: "#64748b", cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                📧 Test dag email versturen
+              </button>
             </div>
           </Section>
 
