@@ -46,6 +46,17 @@ function initials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+const STAGE_BADGE: Record<string, { bg: string; color: string }> = {
+  lead:         { bg: "#f1f5f9", color: "#64748b" },
+  bezichtiging: { bg: "#fef9c3", color: "#854d0e" },
+  bod:          { bg: "#dbeafe", color: "#1e40af" },
+  koopakte:     { bg: "#ede9fe", color: "#5b21b6" },
+  voorwaarden:  { bg: "#fee2e2", color: "#991b1b" },
+  financiering: { bg: "#ffedd5", color: "#9a3412" },
+  overdracht:   { bg: "#dcfce7", color: "#14532d" },
+  gesloten:     { bg: "#f1f5f9", color: "#374151" },
+};
+
 // ── PendingCard ────────────────────────────────────────────────────────────
 
 function PendingCard({ msg, onApproved, onDeleted }: {
@@ -113,7 +124,7 @@ function PendingCard({ msg, onApproved, onDeleted }: {
             {initials(contactName)}
           </div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", marginBottom: 2 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", marginBottom: 1 }}>
               {contactName}
               {msg.contacts?.partner_name && (
                 <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 400, marginLeft: 6 }}>
@@ -121,16 +132,30 @@ function PendingCard({ msg, onApproved, onDeleted }: {
                 </span>
               )}
             </div>
-            <span
-              onClick={() => router.push(`/dashboard/${msg.deal_id}`)}
-              style={{
-                fontSize: 11, color: "#0284c7", background: "#f0f9ff",
-                border: "1px solid #bae6fd", borderRadius: 20, padding: "2px 10px",
-                cursor: "pointer", display: "inline-block",
-              }}
-            >
-              {dealAddress}
-            </span>
+            {msg.contacts?.phone && (
+              <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>{msg.contacts.phone}</div>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span
+                onClick={() => router.push(`/dashboard/${msg.deal_id}`)}
+                style={{ fontSize: 11, color: "#0284c7", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 20, padding: "2px 10px", cursor: "pointer" }}
+              >
+                {dealAddress}
+              </span>
+              {msg.deals?.stage && (() => {
+                const s = STAGE_BADGE[msg.deals.stage] ?? { bg: "#f1f5f9", color: "#64748b" };
+                return (
+                  <span style={{ fontSize: 10, fontWeight: 600, background: s.bg, color: s.color, borderRadius: 20, padding: "2px 8px" }}>
+                    {msg.deals.stage.charAt(0).toUpperCase() + msg.deals.stage.slice(1)}
+                  </span>
+                );
+              })()}
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <span style={{ fontSize: 10, background: "#f1f5f9", color: "#64748b", borderRadius: 20, padding: "2px 10px" }}>
+                {msg.trigger_event ?? "Handmatig"}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -241,17 +266,27 @@ function SentCard({ msg }: { msg: MessageRow }) {
             {initials(contactName)}
           </div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", marginBottom: 2 }}>{contactName}</div>
-            <span
-              onClick={() => router.push(`/dashboard/${msg.deal_id}`)}
-              style={{ fontSize: 11, color: "#0284c7", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 20, padding: "2px 10px", cursor: "pointer", display: "inline-block" }}
-            >
-              {dealAddress}
-            </span>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", marginBottom: 1 }}>{contactName}</div>
+            {msg.contacts?.phone && (
+              <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>{msg.contacts.phone}</div>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span onClick={() => router.push(`/dashboard/${msg.deal_id}`)} style={{ fontSize: 11, color: "#0284c7", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 20, padding: "2px 10px", cursor: "pointer" }}>
+                {dealAddress}
+              </span>
+              {msg.deals?.stage && (() => {
+                const s = STAGE_BADGE[msg.deals.stage] ?? { bg: "#f1f5f9", color: "#64748b" };
+                return <span style={{ fontSize: 10, fontWeight: 600, background: s.bg, color: s.color, borderRadius: 20, padding: "2px 8px" }}>{msg.deals.stage.charAt(0).toUpperCase() + msg.deals.stage.slice(1)}</span>;
+              })()}
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <span style={{ fontSize: 10, background: "#f1f5f9", color: "#64748b", borderRadius: 20, padding: "2px 10px" }}>
+                {msg.trigger_event ?? "Handmatig"}
+              </span>
+            </div>
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
-          {msg.trigger_event && <span style={{ fontSize: 10, background: "#f1f5f9", color: "#64748b", borderRadius: 20, padding: "2px 8px" }}>{msg.trigger_event}</span>}
           <span style={{ fontSize: 10, color: "#94a3b8" }}>
             Verzonden op {msg.sent_at ? formatDateTime(msg.sent_at) : formatDateTime(msg.created_at)}
           </span>
@@ -285,10 +320,24 @@ function GenericCard({ msg }: { msg: MessageRow }) {
             {initials(contactName)}
           </div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", marginBottom: 2 }}>{contactName}</div>
-            <span onClick={() => router.push(`/dashboard/${msg.deal_id}`)} style={{ fontSize: 11, color: "#0284c7", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 20, padding: "2px 10px", cursor: "pointer", display: "inline-block" }}>
-              {dealAddress}
-            </span>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", marginBottom: 1 }}>{contactName}</div>
+            {msg.contacts?.phone && (
+              <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>{msg.contacts.phone}</div>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span onClick={() => router.push(`/dashboard/${msg.deal_id}`)} style={{ fontSize: 11, color: "#0284c7", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 20, padding: "2px 10px", cursor: "pointer" }}>
+                {dealAddress}
+              </span>
+              {msg.deals?.stage && (() => {
+                const s = STAGE_BADGE[msg.deals.stage] ?? { bg: "#f1f5f9", color: "#64748b" };
+                return <span style={{ fontSize: 10, fontWeight: 600, background: s.bg, color: s.color, borderRadius: 20, padding: "2px 8px" }}>{msg.deals.stage.charAt(0).toUpperCase() + msg.deals.stage.slice(1)}</span>;
+              })()}
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <span style={{ fontSize: 10, background: "#f1f5f9", color: "#64748b", borderRadius: 20, padding: "2px 10px" }}>
+                {msg.trigger_event ?? "Handmatig"}
+              </span>
+            </div>
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
