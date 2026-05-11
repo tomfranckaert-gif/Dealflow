@@ -33,6 +33,10 @@ function daysSince(d: string) {
   return Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
 }
 
+function daysUntil(d: string) {
+  return Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
+}
+
 function timeAgo(d: string) {
   const diff = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
   if (diff < 60) return `${diff}m geleden`;
@@ -213,58 +217,96 @@ function StageBadge({ stage }: { stage: DealStage }) {
 }
 
 function DealCard({ deal, onClick }: { deal: DealWithContacts; onClick: () => void }) {
-  const urgent = isUrgent(deal);
   const days = daysSince(deal.created_at);
   const progress = ((stageIndex(deal.stage as DealStage) + 1) / STAGES.length) * 100;
   const [hovered, setHovered] = useState(false);
 
+  // Urgent: voorwaarden expiring ≤7d, stage stuck >21d, or no activity >10d
+  const voorwaardenExpiring =
+    deal.stage === "voorwaarden" && deal.transfer_date != null && daysUntil(deal.transfer_date) <= 7;
+  const stageStuck = days > 21;
+  const noActivity = days > 10 && deal.stage !== "gesloten";
+  const showUrgentDot = voorwaardenExpiring || stageStuck || noActivity;
+
+  // Price: prefer agreed, fall back to asking, then value
+  const price = deal.agreed_price ?? deal.asking_price ?? deal.value ?? null;
+  const isAgreed = deal.agreed_price != null;
+
   return (
     <div
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         background: "#ffffff",
-        border: "1px solid #e8ecf0",
-        boxShadow: hovered ? "0 4px 12px rgba(0,0,0,0.06)" : "0 1px 3px rgba(0,0,0,0.04)",
+        border: `1px solid ${hovered ? "#cbd5e1" : "#e8ecf0"}`,
+        boxShadow: hovered ? "0 4px 12px rgba(0,0,0,0.08)" : "0 1px 3px rgba(0,0,0,0.04)",
         borderRadius: "12px",
         padding: "14px 16px",
         cursor: "pointer",
         marginBottom: "8px",
-        transition: "box-shadow 0.15s",
+        transition: "all 0.15s",
         opacity: deal.stage === "gesloten" ? 0.6 : 1,
       }}
-      onMouseEnter={(e) => { setHovered(true); e.currentTarget.style.borderColor = "#cbd5e1"; }}
-      onMouseLeave={(e) => { setHovered(false); e.currentTarget.style.borderColor = "#e8ecf0"; }}
     >
       {/* Row 1: address + price */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
-          {urgent && <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#ef4444", flexShrink: 0 }} />}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "6px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "7px", minWidth: 0, flex: 1 }}>
+          {showUrgentDot && (
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", boxShadow: "0 0 0 2px rgba(239,68,68,0.3)", flexShrink: 0 }} />
+          )}
           <span style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a", letterSpacing: "-0.3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {deal.address ?? deal.title}
           </span>
         </div>
-        {(deal.agreed_price ?? deal.value) != null && (
-          <span style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a", letterSpacing: "-0.3px", whiteSpace: "nowrap", marginLeft: "12px" }}>
-            {formatEuro(deal.agreed_price ?? deal.value ?? 0)}
-          </span>
+        {price != null && (
+          <div style={{ flexShrink: 0, marginLeft: 12, textAlign: "right" }}>
+            <div style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a", letterSpacing: "-0.3px", whiteSpace: "nowrap" }}>
+              {formatEuro(price)}
+            </div>
+            {!isAgreed && (
+              <div style={{ fontSize: 10, color: "#94a3b8" }}>Vraagprijs</div>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Row 2: buyer + type */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-        <span style={{ fontSize: "13px", color: "#64748b" }}>{deal.buyer?.name ?? deal.contact_name ?? "—"}</span>
-        <span style={{ fontSize: "13px", color: "#94a3b8" }}>{deal.property_type ?? ""}</span>
+      {/* Row 2: buyer + seller */}
+      <div style={{ marginBottom: "5px" }}>
+        <div style={{ fontSize: 13, color: "#64748b" }}>{deal.buyer?.name ?? deal.contact_name ?? "—"}</div>
+        {deal.seller?.name && (
+          <div style={{ fontSize: 11, color: "#94a3b8" }}>Verkoper: {deal.seller.name}</div>
+        )}
       </div>
 
-      {/* Row 3: badge + days */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-        <StageBadge stage={deal.stage as DealStage} />
-        <span style={{ fontSize: "11px", color: "#94a3b8" }}>{days} dagen</span>
+      {/* Row 3: property type + surface */}
+      {(deal.property_type || deal.surface) && (
+        <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: "8px" }}>
+          {deal.property_type ?? ""}
+          {deal.surface ? ` · ${deal.surface}m²` : ""}
+        </div>
+      )}
+
+      {/* Row 4: stage badge + transfer date + days */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", flexWrap: "wrap", gap: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <StageBadge stage={deal.stage as DealStage} />
+          {deal.transfer_date && (
+            <span style={{
+              fontSize: 11,
+              fontWeight: 500,
+              color: daysUntil(deal.transfer_date) <= 14 ? "#ef4444" : "#64748b",
+            }}>
+              Overdracht: {new Date(deal.transfer_date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
+            </span>
+          )}
+        </div>
+        <span style={{ fontSize: "11px", color: "#94a3b8" }}>{days}d</span>
       </div>
 
-      {/* Row 4: progress bar */}
+      {/* Row 5: progress bar */}
       <div style={{ height: "3px", background: "#f1f5f9", borderRadius: "2px" }}>
-        <div style={{ height: "100%", width: `${progress}%`, background: urgent ? "#ef4444" : "#0284c7", borderRadius: "2px", transition: "width 0.3s" }} />
+        <div style={{ height: "100%", width: `${progress}%`, background: showUrgentDot ? "#ef4444" : "#0284c7", borderRadius: "2px", transition: "width 0.3s" }} />
       </div>
     </div>
   );
