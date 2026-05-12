@@ -158,6 +158,7 @@ export default function RelatiesPage() {
   const [toast, setToast] = useState("");
   const [tab, setTab] = useState<"actief" | "gesloten">("actief");
   const [search, setSearch] = useState("");
+  const [jubileaOpen, setJubileaOpen] = useState(true);
 
   useEffect(() => {
     async function load() {
@@ -294,6 +295,86 @@ export default function RelatiesPage() {
 
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: "auto", background: "#f8fafc", padding: "20px 24px" }}>
+
+        {/* ── Jubilea & Verjaardagen ── */}
+        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: jubileaOpen ? 12 : 0 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>
+              🎂 Verjaardagen &amp; Jubilea
+            </div>
+            <button
+              onClick={() => setJubileaOpen((o) => !o)}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 18, lineHeight: 1, padding: "0 4px" }}
+            >
+              {jubileaOpen ? "−" : "+"}
+            </button>
+          </div>
+          {jubileaOpen && (
+            todayJubilea.length === 0 && weekJubilea.length === 0 ? (
+              <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: "8px 0" }}>
+                Geen jubilea deze week
+              </div>
+            ) : (
+              <>
+                {todayJubilea.map((deal, i) => {
+                  const years = yearsAgo(deal.created_at);
+                  const addr = deal.address ?? deal.title ?? "Onbekend adres";
+                  const key = `jub-today-${deal.id}`;
+                  return (
+                    <div
+                      key={key}
+                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: (i < todayJubilea.length - 1 || weekJubilea.length > 0) ? "1px solid #f8fafc" : "none" }}
+                    >
+                      <span style={{ fontSize: 20, flexShrink: 0 }}>🏠</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>
+                          {years} jaar geleden verkocht — {addr}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                          Koper: {deal.buyer?.name ?? "Onbekend"} · Vandaag jubileum!
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => router.push(`/dashboard/${deal.id}?section=whatsapp`)}
+                        style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, background: "#f5f3ff", border: "1px solid #ddd6fe", color: "#7c3aed", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+                      >
+                        Stuur bericht
+                      </button>
+                    </div>
+                  );
+                })}
+                {weekJubilea.map((deal, i) => {
+                  const years = yearsAgo(deal.created_at);
+                  const daysLeft = daysUntilAnniversary(deal.created_at);
+                  const addr = deal.address ?? deal.title ?? "Onbekend adres";
+                  const key = `jub-week-${deal.id}`;
+                  return (
+                    <div
+                      key={key}
+                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: i < weekJubilea.length - 1 ? "1px solid #f8fafc" : "none" }}
+                    >
+                      <span style={{ fontSize: 20, flexShrink: 0 }}>📅</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>
+                          {years} jaar geleden verkocht — {addr}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                          Koper: {deal.buyer?.name ?? "Onbekend"} · Over {daysLeft} dag{daysLeft === 1 ? "" : "en"}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => router.push(`/dashboard/${deal.id}?section=whatsapp`)}
+                        style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, background: "#f0f9ff", border: "1px solid #bae6fd", color: "#0284c7", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+                      >
+                        Stuur bericht
+                      </button>
+                    </div>
+                  );
+                })}
+              </>
+            )
+          )}
+        </div>
 
         {/* ── Section 1: VANDAAG ── */}
         <SectionCard header="Vandaag">
