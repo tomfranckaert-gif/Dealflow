@@ -1,9 +1,47 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { DealStage } from "@/types/database";
+
+const INZICHTEN_TABS = [
+  { id: "statistieken", label: "Statistieken", href: "/dashboard/statistieken" },
+  { id: "wwft",         label: "Wwft Overzicht", href: "/dashboard/wwft" },
+  { id: "marktkaart",   label: "Marktkaart",    href: "/dashboard/marktkaart" },
+];
+
+function InzichtenTabs() {
+  const pathname = usePathname();
+  const router = useRouter();
+  return (
+    <div style={{ display: "flex", borderBottom: "1px solid #e8ecf0", background: "#fff", padding: "0 24px", flexShrink: 0 }}>
+      {INZICHTEN_TABS.map((tab) => {
+        const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
+        return (
+          <button
+            key={tab.id}
+            onClick={() => router.push(tab.href)}
+            style={{
+              fontSize: 13,
+              fontWeight: active ? 600 : 400,
+              color: active ? "#0284c7" : "#64748b",
+              padding: "10px 16px",
+              border: "none",
+              borderBottom: `2px solid ${active ? "#0284c7" : "transparent"}`,
+              background: "transparent",
+              cursor: "pointer",
+              transition: "all 0.15s",
+              marginBottom: -1,
+            }}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 const STAGES: { id: DealStage; label: string; color: string }[] = [
   { id: "lead",         label: "Lead",         color: "#94a3b8" },
@@ -138,25 +176,37 @@ export default function StatistiekenPage() {
 
   if (loading) {
     return (
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
-        <span style={{ fontSize: 13, color: "#94a3b8" }}>Laden…</span>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "DM Sans, Helvetica Neue, sans-serif" }}>
+        <div style={{ height: 56, background: "#fff", display: "flex", alignItems: "center", padding: "0 24px", flexShrink: 0 }}>
+          <span style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.5px" }}>Inzichten</span>
+        </div>
+        <InzichtenTabs />
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
+          <span style={{ fontSize: 13, color: "#94a3b8" }}>Laden…</span>
+        </div>
       </div>
     );
   }
 
   if (deals.length === 0) {
     return (
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginBottom: 6 }}>Nog geen deals</div>
-          <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 20 }}>Maak je eerste deal aan om statistieken te zien</div>
-          <button
-            onClick={() => router.push("/dashboard/new-deal")}
-            style={{ background: "#0284c7", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-          >
-            + Eerste deal aanmaken
-          </button>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "DM Sans, Helvetica Neue, sans-serif" }}>
+        <div style={{ height: 56, background: "#fff", display: "flex", alignItems: "center", padding: "0 24px", flexShrink: 0 }}>
+          <span style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.5px" }}>Inzichten</span>
+        </div>
+        <InzichtenTabs />
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginBottom: 6 }}>Nog geen deals</div>
+            <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 20 }}>Maak je eerste deal aan om statistieken te zien</div>
+            <button
+              onClick={() => router.push("/dashboard/new-deal")}
+              style={{ background: "#0284c7", color: "#fff", border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            >
+              + Eerste deal aanmaken
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -165,12 +215,13 @@ export default function StatistiekenPage() {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "DM Sans, Helvetica Neue, sans-serif" }}>
       {/* Top bar */}
-      <div style={{ height: 56, background: "#fff", borderBottom: "1px solid #e8ecf0", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", flexShrink: 0 }}>
+      <div style={{ height: 56, background: "#fff", borderBottom: "none", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", flexShrink: 0 }}>
         <div>
-          <span style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.5px" }}>Statistieken</span>
+          <span style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.5px" }}>Inzichten</span>
           <span style={{ fontSize: 13, color: "#94a3b8", marginLeft: 12 }}>{deals.length} deals totaal</span>
         </div>
       </div>
+      <InzichtenTabs />
 
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: "auto", background: "#f8fafc", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
