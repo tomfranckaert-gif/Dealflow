@@ -15,6 +15,8 @@ const TEAM = [
   { id: "5", name: "Thomas Klein",   initials: "TK", color: "#dc2626" },
 ];
 
+const STAGE_ORDER = ["lead", "bezichtiging", "bod", "koopakte", "voorwaarden", "financiering", "overdracht", "gesloten"];
+
 const STAGE_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
   lead:         { bg: "#f1f5f9", text: "#64748b",  dot: "#94a3b8" },
   bezichtiging: { bg: "#fef9c3", text: "#854d0e",  dot: "#eab308" },
@@ -29,71 +31,28 @@ const STAGE_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
 const fmt = (n: number) =>
   new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
-function StageBadge({ stage }: { stage: string }) {
-  const s = STAGE_STYLE[stage] ?? STAGE_STYLE.lead;
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: s.bg, color: s.text }}>
-      <span style={{ width: 5, height: 5, borderRadius: "50%", background: s.dot }} />
-      {stage.charAt(0).toUpperCase() + stage.slice(1)}
-    </span>
-  );
+function daysUntil(dateStr: string) {
+  return Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
 }
 
-function DealCard({ deal, onClick }: { deal: Deal; onClick: () => void }) {
-  const [hovered, setHovered] = useState(false);
-  const price = deal.agreed_price ?? deal.asking_price ?? deal.value;
-  const isAgreed = deal.agreed_price != null;
-  const days = Math.floor((Date.now() - new Date(deal.created_at).getTime()) / 86400000);
+interface Condition {
+  id: string;
+  deal_id: string;
+  label: string;
+  deadline: string;
+  status: string;
+}
 
+function KpiCard({ label, value, sub, color }: { label: string; value: string | number; sub: string; color: string }) {
   return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        background: "#fff",
-        border: `1px solid ${hovered ? "#cbd5e1" : "#e8ecf0"}`,
-        boxShadow: hovered ? "0 4px 12px rgba(0,0,0,0.08)" : "0 1px 3px rgba(0,0,0,0.04)",
-        borderRadius: 12,
-        padding: "14px 16px",
-        cursor: "pointer",
-        marginBottom: 8,
-        transition: "all 0.15s",
-        opacity: deal.stage === "gesloten" ? 0.65 : 1,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.3px" }}>
-          {deal.address ?? deal.title ?? "Onbekend adres"}
-        </span>
-        {price != null && (
-          <div style={{ flexShrink: 0, marginLeft: 12, textAlign: "right" }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{fmt(price)}</div>
-            {!isAgreed && <div style={{ fontSize: 10, color: "#94a3b8" }}>Vraagprijs</div>}
-          </div>
-        )}
+    <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px" }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 8 }}>
+        {label}
       </div>
-
-      {deal.city && (
-        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>{deal.city}</div>
-      )}
-
-      {(deal.property_type || deal.surface) && (
-        <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 8 }}>
-          {deal.property_type ?? ""}{deal.surface ? ` · ${deal.surface}m²` : ""}
-        </div>
-      )}
-
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <StageBadge stage={deal.stage} />
-        <span style={{ fontSize: 11, color: "#94a3b8" }}>{days}d</span>
+      <div style={{ fontSize: 24, fontWeight: 700, color, letterSpacing: "-0.5px", marginBottom: 4 }}>
+        {value}
       </div>
-
-      {deal.transfer_date && (
-        <div style={{ marginTop: 6, fontSize: 11, color: "#64748b" }}>
-          Overdracht: {new Date(deal.transfer_date).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
-        </div>
-      )}
+      <div style={{ fontSize: 11, color: "#94a3b8" }}>{sub}</div>
     </div>
   );
 }
@@ -102,20 +61,32 @@ export default function MakelaarPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [conditions, setConditions] = useState<Condition[]>([]);
   const [loading, setLoading] = useState(true);
 
   const memberIndex = TEAM.findIndex((m) => m.id === id);
   const member = TEAM[memberIndex];
 
   useEffect(() => {
+    if (memberIndex === -1) { setLoading(false); return; }
     supabase
       .from("deals")
       .select("*")
       .neq("stage", "gesloten")
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         const all = (data as Deal[]) ?? [];
         const mine = all.filter((_, idx) => idx % 5 === memberIndex);
         setDeals(mine);
+
+        if (mine.length > 0) {
+          const { data: conds } = await supabase
+            .from("conditions")
+            .select("*")
+            .in("deal_id", mine.map((d) => d.id))
+            .eq("status", "open");
+          setConditions((conds as Condition[]) ?? []);
+        }
+
         setLoading(false);
       });
   }, [memberIndex]);
@@ -133,11 +104,39 @@ export default function MakelaarPage() {
     );
   }
 
-  const totalValue = deals.reduce((s, d) => s + (d.agreed_price ?? d.asking_price ?? 0), 0);
+  // ── KPI calculations ─────────────────────────────────────────────────────
+
+  const criticalCount = conditions.filter((c) =>
+    Math.ceil((new Date(c.deadline).getTime() - Date.now()) / 86400000) <= 3
+  ).length;
+
+  const courtageDeals = deals.filter((d) => d.transfer_date);
+  const courtageTotal = courtageDeals.reduce((s, d) => s + (d.agreed_price ?? 0) * 0.015, 0);
+  const pipelineTotal = deals.reduce((s, d) => s + (d.agreed_price ?? 0), 0);
+
+  // ── Urgent conditions (within 7 days) ────────────────────────────────────
+
+  const urgentConditions = conditions
+    .filter((c) => Math.ceil((new Date(c.deadline).getTime() - Date.now()) / 86400000) <= 7)
+    .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+
+  // ── Deals grouped by stage ───────────────────────────────────────────────
+
+  const byStage = STAGE_ORDER.reduce<Record<string, Deal[]>>((acc, s) => {
+    const group = deals.filter((d) => d.stage === s);
+    if (group.length > 0) acc[s] = group;
+    return acc;
+  }, {});
+
+  // ── Courtage table deals ─────────────────────────────────────────────────
+
+  const courtageRows = deals
+    .filter((d) => d.transfer_date)
+    .sort((a, b) => new Date(a.transfer_date!).getTime() - new Date(b.transfer_date!).getTime());
 
   return (
     <div style={{ flex: 1, overflowY: "auto", background: "#f8fafc", fontFamily: "DM Sans, Helvetica Neue, sans-serif" }}>
-      <div style={{ padding: "28px 32px", maxWidth: 900, margin: "0 auto" }}>
+      <div style={{ padding: "28px 32px", maxWidth: 960, margin: "0 auto" }}>
 
         {/* Back button */}
         <button
@@ -149,34 +148,189 @@ export default function MakelaarPage() {
         </button>
 
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
-          <div style={{ width: 52, height: 52, borderRadius: "50%", background: member.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28 }}>
+          <div style={{ width: 52, height: 52, borderRadius: "50%", background: member.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
             {member.initials}
           </div>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: "#0f172a", margin: 0 }}>Deals van {member.name}</h1>
-            <p style={{ fontSize: 13, color: "#94a3b8", margin: "3px 0 0" }}>
-              {deals.length} actieve deals · pipeline {new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(totalValue)}
-            </p>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: "#0f172a", margin: 0, letterSpacing: "-0.5px" }}>{member.name}</h1>
+            <p style={{ fontSize: 13, color: "#94a3b8", margin: "3px 0 0" }}>Makelaar overzicht</p>
           </div>
         </div>
 
-        {/* Deal cards */}
         {loading ? (
           <div style={{ textAlign: "center", padding: 40, color: "#94a3b8", fontSize: 13 }}>Laden…</div>
-        ) : deals.length === 0 ? (
-          <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "48px 24px", textAlign: "center" }}>
-            <div style={{ fontSize: 32, marginBottom: 10 }}>📭</div>
-            <div style={{ fontSize: 14, color: "#64748b" }}>Geen actieve deals</div>
-          </div>
         ) : (
-          deals.map((deal) => (
-            <DealCard
-              key={deal.id}
-              deal={deal}
-              onClick={() => router.push(`/dashboard/${deal.id}`)}
-            />
-          ))
+          <>
+            {/* ── Section 1: KPI row ─────────────────────────────────────────── */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
+              <KpiCard
+                label="Actieve objecten"
+                value={deals.length}
+                sub="in behandeling"
+                color="#0284c7"
+              />
+              <KpiCard
+                label="Kritieke acties"
+                value={criticalCount}
+                sub="deadlines binnen 3 dagen"
+                color={criticalCount > 0 ? "#ef4444" : "#16a34a"}
+              />
+              <KpiCard
+                label="Verwachte courtage"
+                value={fmt(courtageTotal)}
+                sub="transport ingepland"
+                color="#16a34a"
+              />
+              <KpiCard
+                label="Pipeline totaal"
+                value={fmt(pipelineTotal)}
+                sub="alle actieve objecten"
+                color="#7c3aed"
+              />
+            </div>
+
+            {/* ── Section 2: Kritieke acties ─────────────────────────────────── */}
+            <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: 16, marginBottom: 16 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 14 }}>
+                🔴 Kritieke acties
+              </div>
+              {urgentConditions.length === 0 ? (
+                <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "12px 16px", fontSize: 13, fontWeight: 600, color: "#16a34a" }}>
+                  ✓ Geen kritieke acties
+                </div>
+              ) : (
+                urgentConditions.map((c, i) => {
+                  const days = Math.ceil((new Date(c.deadline).getTime() - Date.now()) / 86400000);
+                  const deal = deals.find((d) => d.id === c.deal_id);
+                  const dotColor = days <= 1 ? "#ef4444" : days <= 3 ? "#f97316" : "#eab308";
+                  const textColor = days <= 1 ? "#ef4444" : days <= 3 ? "#f97316" : "#eab308";
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => router.push(`/dashboard/${deal?.id}?section=voorwaarden`)}
+                      style={{ cursor: "pointer", display: "flex", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: i < urgentConditions.length - 1 ? "1px solid #f8fafc" : "none" }}
+                    >
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", flexShrink: 0, background: dotColor }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{c.label}</div>
+                        <div style={{ fontSize: 11, color: "#64748b" }}>{deal?.address ?? "Onbekend adres"}</div>
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: textColor, flexShrink: 0 }}>
+                        {days <= 0 ? "Verlopen" : days === 1 ? "Morgen" : `${days} dagen`}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* ── Section 3: Status per object ───────────────────────────────── */}
+            <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: 16, marginBottom: 16 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 14 }}>
+                Objecten status
+              </div>
+              {deals.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "24px 0", fontSize: 13, color: "#94a3b8" }}>Geen actieve objecten</div>
+              ) : (
+                Object.entries(byStage).map(([stage, stageDeals]) => {
+                  const s = STAGE_STYLE[stage] ?? STAGE_STYLE.lead;
+                  return (
+                    <div key={stage} style={{ marginBottom: 14 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: s.text, background: s.bg, borderRadius: 20, padding: "2px 10px" }}>
+                          {stage.charAt(0).toUpperCase() + stage.slice(1)}
+                        </span>
+                        <span style={{ fontSize: 11, color: "#94a3b8" }}>{stageDeals.length} object{stageDeals.length !== 1 ? "en" : ""}</span>
+                      </div>
+                      {stageDeals.map((d) => {
+                        const daysUntilTransfer = d.transfer_date ? daysUntil(d.transfer_date) : null;
+                        return (
+                          <div
+                            key={d.id}
+                            onClick={() => router.push(`/dashboard/${d.id}`)}
+                            style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#f8fafc", borderRadius: 8, marginBottom: 6, cursor: "pointer" }}
+                          >
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {d.address ?? d.title ?? "Onbekend adres"}
+                              </div>
+                              {d.city && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{d.city}</div>}
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: "#0284c7" }}>
+                                {d.agreed_price ? fmt(d.agreed_price) : d.asking_price ? fmt(d.asking_price) : "—"}
+                              </div>
+                              {d.transfer_date && (
+                                <div style={{ fontSize: 10, color: daysUntilTransfer !== null && daysUntilTransfer <= 14 ? "#ef4444" : "#64748b", marginTop: 2 }}>
+                                  📅 {new Date(d.transfer_date).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* ── Section 4: Courtage overzicht ──────────────────────────────── */}
+            <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: 16, marginBottom: 16 }}>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.6px" }}>
+                  Courtage forecast
+                </div>
+                <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Alleen deals met transport datum</div>
+              </div>
+
+              {courtageRows.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "24px 0" }}>
+                  <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 4 }}>Geen transport datums ingesteld</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>Courtage wordt zichtbaar zodra transport is ingepland</div>
+                </div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #e8ecf0" }}>
+                      {["Adres", "Transport datum", "Koopsom", "Courtage"].map((h) => (
+                        <th key={h} style={{ padding: "6px 8px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {courtageRows.map((d) => (
+                      <tr
+                        key={d.id}
+                        onClick={() => router.push(`/dashboard/${d.id}`)}
+                        style={{ borderBottom: "1px solid #f8fafc", cursor: "pointer" }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#f8fafc"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                      >
+                        <td style={{ padding: "10px 8px", color: "#0f172a", fontWeight: 500 }}>
+                          {d.address ?? d.title ?? "—"}
+                        </td>
+                        <td style={{ padding: "10px 8px", color: "#64748b" }}>
+                          {new Date(d.transfer_date!).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" })}
+                        </td>
+                        <td style={{ padding: "10px 8px", color: "#0f172a" }}>
+                          {d.agreed_price ? fmt(d.agreed_price) : "—"}
+                        </td>
+                        <td style={{ padding: "10px 8px", color: "#16a34a", fontWeight: 700 }}>
+                          {d.agreed_price ? fmt(d.agreed_price * 0.015) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr style={{ borderTop: "2px solid #e8ecf0", background: "#f8fafc" }}>
+                      <td colSpan={3} style={{ padding: "10px 8px", fontSize: 11, fontWeight: 700, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.5px" }}>Totaal</td>
+                      <td style={{ padding: "10px 8px", color: "#16a34a", fontWeight: 700, fontSize: 14 }}>{fmt(courtageTotal)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>
