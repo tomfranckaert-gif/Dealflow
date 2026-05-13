@@ -10,7 +10,10 @@ export default async function DashboardPage() {
 
   const { data: deals } = await supabase
     .from("deals")
-    .select("*")
+    .select(`*,
+      buyer:contacts!deals_buyer_id_fkey(*),
+      seller:contacts!deals_seller_id_fkey(*)
+    `)
     .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
 

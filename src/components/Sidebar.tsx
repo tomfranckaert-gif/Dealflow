@@ -37,20 +37,36 @@ const NAV_ITEMS = [
     icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z",
   },
   {
-    id: "inzichten",
-    label: "Inzichten",
+    id: "statistieken",
+    label: "Statistieken",
     href: "/dashboard/statistieken",
     exact: false,
     icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
   },
+  {
+    id: "wwft",
+    label: "Wwft",
+    href: "/dashboard/wwft",
+    exact: false,
+    icon: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
+  },
+  {
+    id: "kantoor",
+    label: "Kantoor",
+    href: "/dashboard/directeur",
+    exact: false,
+    icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",
+  },
+  {
+    id: "instellingen",
+    label: "Instellingen",
+    href: "/dashboard/instellingen",
+    exact: false,
+    icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z",
+  },
 ];
 
-const INZICHTEN_PREFIXES = ["/dashboard/statistieken", "/dashboard/wwft", "/dashboard/marktkaart"];
-
-function isActive(pathname: string, item: { href: string; exact?: boolean; id: string }) {
-  if (item.id === "inzichten") {
-    return INZICHTEN_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
-  }
+function isActive(pathname: string, item: { href: string; exact?: boolean }) {
   if (item.exact) return pathname === item.href;
   return pathname === item.href || pathname.startsWith(item.href + "/");
 }
@@ -58,7 +74,6 @@ function isActive(pathname: string, item: { href: string; exact?: boolean; id: s
 export default function Sidebar({ userEmail, agentName }: { userEmail: string; agentName?: string | null }) {
   const pathname = usePathname();
   const [pendingCount, setPendingCount] = useState(0);
-  const [isDirecteur, setIsDirecteur] = useState(false);
   const [role, setRole] = useState<string>("Makelaar");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
@@ -84,7 +99,6 @@ export default function Sidebar({ userEmail, agentName }: { userEmail: string; a
 
       if (agent?.role) {
         setRole(agent.role.charAt(0).toUpperCase() + agent.role.slice(1));
-        setIsDirecteur(agent.role === "directeur");
       }
     }
     load();
@@ -99,18 +113,7 @@ export default function Sidebar({ userEmail, agentName }: { userEmail: string; a
   const displayName = agentName || userEmail || "—";
   const initials = displayName.charAt(0).toUpperCase();
 
-  const allItems = isDirecteur
-    ? [
-        ...NAV_ITEMS,
-        {
-          id: "kantoor",
-          label: "Kantoor",
-          href: "/dashboard/directeur",
-          exact: false,
-          icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",
-        },
-      ]
-    : NAV_ITEMS;
+  const allItems = NAV_ITEMS;
 
   return (
     <aside style={{ width: "220px", minWidth: "220px", background: "#ffffff", borderRight: "1px solid #e8ecf0", display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0 }}>
