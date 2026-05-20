@@ -1451,338 +1451,235 @@ function GesprekkenSection({ dealId }: { dealId: string }) {
 
 // ─── Overdracht ───────────────────────────────────────────────────────────────
 
-const NOTARIS_DOCUMENTS = [
-  { id: "koopakte",              label: "Getekende koopovereenkomst", source: "Move.nl",          required: true  },
-  { id: "legitimatie_koper",     label: "Legitimatie koper(s)",       source: "Move.nl/Wwft",     required: true  },
-  { id: "legitimatie_verkoper",  label: "Legitimatie verkoper(s)",    source: "Move.nl/Wwft",     required: true  },
-  { id: "courtage_nota",         label: "Courtage nota makelaar",     source: "WeFact/Realworks", required: true  },
-  { id: "eigendomsakte",         label: "Eigendomsakte",              source: "Kadaster",         required: true  },
-  { id: "hypotheekakte",         label: "Hypotheekakte bank",         source: "Bank",             required: true  },
-  { id: "bankgarantie",          label: "Bankgarantie / waarborgsom", source: "Bank",             required: true  },
-  { id: "vve",                   label: "VvE documenten",             source: "VvE",              required: false },
-  { id: "splitsingsakte",        label: "Splitsingsakte",             source: "Kadaster",         required: false },
-  { id: "lijst_zaken",           label: "Lijst van zaken",            source: "Move.nl",          required: true  },
-  { id: "energielabel",          label: "Energielabel",               source: "RVO",              required: true  },
-];
+interface InvoiceState {
+  invoice_created_at: string | null;
+  invoice_created_by: string | null;
+  invoice_in_move: boolean | null;
+  invoice_move_uploaded_at: string | null;
+  invoice_move_uploaded_by: string | null;
+  invoice_paid: boolean | null;
+  invoice_paid_at: string | null;
+  created_by_name: string | null;
+  move_by_name: string | null;
+}
 
-const SLEUTEL_ITEMS = [
-  "Voordeursleutels (2x)",
-  "Brievenbus sleutel",
-  "Garage / berging sleutel",
-  "Gemeenschappelijke ruimte pas/sleutel",
-  "Alarm code overgedragen",
-  "Handleidingen overgedragen",
-];
+function TimelineStep({
+  label, completed, pending, last, children,
+}: {
+  label: string; completed: boolean; pending?: boolean; last?: boolean; children: React.ReactNode;
+}) {
+  const dotColor = completed ? "#16a34a" : pending ? "#f97316" : "#d1d5db";
+  return (
+    <div style={{ display: "flex", gap: 12, paddingBottom: last ? 0 : 20, position: "relative" }}>
+      {!last && (
+        <div style={{ position: "absolute", left: 5, top: 14, width: 2, bottom: 0, background: completed ? "#16a34a" : "#e8ecf0" }} />
+      )}
+      <div style={{ width: 12, height: 12, borderRadius: "50%", background: dotColor, flexShrink: 0, marginTop: 3 }} />
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 4 }}>{label}</div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
-function OverdrachtSection({ deal, dealId, currentStage, onAdvanceStage }: { deal: DealWithContacts; dealId: string; currentStage: DealStage; onAdvanceStage: (s: DealStage, msg: string) => Promise<void> }) {
-  // Notaris section state
-  const [transferTime, setTransferTime] = useState(() => {
-    if (typeof window !== "undefined") return localStorage.getItem(`transfer_time_${dealId}`) ?? "";
-    return "";
+function OverdrachtSection({ deal, dealId }: { deal: DealWithContacts; dealId: string; currentStage: DealStage; onAdvanceStage: (s: DealStage, msg: string) => Promise<void> }) {
+  const [inv, setInv] = useState<InvoiceState>({
+    invoice_created_at: null, invoice_created_by: null,
+    invoice_in_move: null, invoice_move_uploaded_at: null, invoice_move_uploaded_by: null,
+    invoice_paid: null, invoice_paid_at: null,
+    created_by_name: null, move_by_name: null,
   });
-  const [notarisChecked, setNotarisChecked] = useState<Record<string, boolean>>(() => {
-    if (typeof window !== "undefined") {
-      try { return JSON.parse(localStorage.getItem(`notaris_docs_${dealId}`) ?? "{}"); } catch { return {}; }
-    }
-    return {};
-  });
-  const [notarisToast, setNotarisToast] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
 
-  // Overdracht section state
-  const [meterGas,   setMeterGas]   = useState(() => typeof window !== "undefined" ? localStorage.getItem(`meters_${dealId}_gas`)   ?? "" : "");
-  const [meterWater, setMeterWater] = useState(() => typeof window !== "undefined" ? localStorage.getItem(`meters_${dealId}_water`) ?? "" : "");
-  const [meterElec,  setMeterElec]  = useState(() => typeof window !== "undefined" ? localStorage.getItem(`meters_${dealId}_elec`)  ?? "" : "");
-  const [meterWarm,  setMeterWarm]  = useState(() => typeof window !== "undefined" ? localStorage.getItem(`meters_${dealId}_warm`)  ?? "" : "");
-  const [meterSaved, setMeterSaved] = useState(false);
-  const [photos, setPhotos]         = useState<{ src: string; name: string }[]>(() => {
-    if (typeof window !== "undefined") {
-      try { return JSON.parse(localStorage.getItem(`photos_${dealId}`) ?? "[]"); } catch { return []; }
-    }
-    return [];
-  });
-  const [sleutelChecked, setSleutelChecked] = useState<Record<string, boolean>>(() => {
-    if (typeof window !== "undefined") {
-      try { return JSON.parse(localStorage.getItem(`sleutels_${dealId}`) ?? "{}"); } catch { return {}; }
-    }
-    return {};
-  });
-  const [closing, setClosing] = useState(false);
-  const [showOverdrachtBanner, setShowOverdrachtBanner] = useState(false);
-
-  // Notaris docs helpers
-  const requiredDocs = NOTARIS_DOCUMENTS.filter(d => d.required);
-  const checkedRequired = requiredDocs.filter(d => notarisChecked[d.id]);
-  const allRequiredChecked = checkedRequired.length === requiredDocs.length;
-  const checkedTotal = NOTARIS_DOCUMENTS.filter(d => notarisChecked[d.id]).length;
-
-  function toggleNotarisDoc(id: string) {
-    const next = { ...notarisChecked, [id]: !notarisChecked[id] };
-    setNotarisChecked(next);
-    if (typeof window !== "undefined") localStorage.setItem(`notaris_docs_${dealId}`, JSON.stringify(next));
-  }
-
-  function saveTransferTime() {
-    if (typeof window !== "undefined") localStorage.setItem(`transfer_time_${dealId}`, transferTime);
-  }
-
-  async function sendNotarisPackage() {
+  const loadInvoice = useCallback(async () => {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from("messages").insert({
-      owner_id: user.id,
-      deal_id: dealId,
-      channel: "whatsapp",
-      content: `Geachte notaris, hierbij het complete transport dossier voor ${deal.address ?? deal.title ?? "deze woning"}. Alle benodigde stukken zijn bijgevoegd.`,
-      status: "concept",
-      trigger_event: "Notaris transport pakket",
-      scheduled_at: null,
-    });
-    setNotarisToast("Concept aangemaakt in WhatsApp");
-    setTimeout(() => setNotarisToast(""), 3000);
-  }
+    if (user) setUserId(user.id);
 
-  // Meterstanden helpers
-  function saveMeters() {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(`meters_${dealId}_gas`,   meterGas);
-      localStorage.setItem(`meters_${dealId}_water`, meterWater);
-      localStorage.setItem(`meters_${dealId}_elec`,  meterElec);
-      localStorage.setItem(`meters_${dealId}_warm`,  meterWarm);
+    const { data } = await supabase
+      .from("deals")
+      .select("invoice_created_at, invoice_created_by, invoice_in_move, invoice_move_uploaded_at, invoice_move_uploaded_by, invoice_paid, invoice_paid_at")
+      .eq("id", dealId)
+      .single();
+
+    if (!data) return;
+
+    const row = data as Record<string, string | boolean | null>;
+    const state: InvoiceState = {
+      invoice_created_at:      (row.invoice_created_at as string | null) ?? null,
+      invoice_created_by:      (row.invoice_created_by as string | null) ?? null,
+      invoice_in_move:         (row.invoice_in_move as boolean | null) ?? null,
+      invoice_move_uploaded_at:(row.invoice_move_uploaded_at as string | null) ?? null,
+      invoice_move_uploaded_by:(row.invoice_move_uploaded_by as string | null) ?? null,
+      invoice_paid:            (row.invoice_paid as boolean | null) ?? null,
+      invoice_paid_at:         (row.invoice_paid_at as string | null) ?? null,
+      created_by_name: null, move_by_name: null,
+    };
+
+    const agentIds = Array.from(new Set([state.invoice_created_by, state.invoice_move_uploaded_by].filter(Boolean))) as string[];
+    if (agentIds.length > 0) {
+      const { data: agents } = await supabase.from("agents").select("id, name").in("id", agentIds);
+      const byId = Object.fromEntries((agents ?? []).map(a => [a.id, a.name]));
+      state.created_by_name = state.invoice_created_by ? (byId[state.invoice_created_by] ?? null) : null;
+      state.move_by_name    = state.invoice_move_uploaded_by ? (byId[state.invoice_move_uploaded_by] ?? null) : null;
     }
-    setMeterSaved(true);
-    setTimeout(() => setMeterSaved(false), 2500);
-  }
 
-  function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = ev => {
-        const src = ev.target?.result as string;
-        setPhotos(prev => {
-          const next = [...prev, { src, name: file.name }].slice(0, 12);
-          if (typeof window !== "undefined") localStorage.setItem(`photos_${dealId}`, JSON.stringify(next));
-          return next;
-        });
-      };
-      reader.readAsDataURL(file);
-    });
-    e.target.value = "";
-  }
+    setInv(state);
+  }, [dealId]);
 
-  function toggleSleutel(item: string) {
-    const next = { ...sleutelChecked, [item]: !sleutelChecked[item] };
-    setSleutelChecked(next);
-    if (typeof window !== "undefined") localStorage.setItem(`sleutels_${dealId}`, JSON.stringify(next));
-  }
+  useEffect(() => { loadInvoice(); }, [loadInvoice]);
 
-  // Completion check
-  const metersOk = meterGas.trim() !== "" && meterElec.trim() !== "";
-  const sleutelCheckedCount = SLEUTEL_ITEMS.filter(i => sleutelChecked[i]).length;
-  const sleutelsOk = sleutelCheckedCount / SLEUTEL_ITEMS.length > 0.5;
-  const overdrachtCompleet = allRequiredChecked && metersOk && sleutelsOk;
-
-  async function handleSluitDeal() {
-    setClosing(true);
-    await onAdvanceStage("gesloten", "Deal gesloten! Gefeliciteerd! 🎉");
+  async function markCreated() {
+    if (!userId) return;
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase.from("messages").insert({
-        owner_id: user.id,
-        deal_id: dealId,
-        channel: "whatsapp",
-        content: `Gefeliciteerd! 🎉 De overdracht van ${deal.address ?? deal.title ?? "uw woning"} is succesvol afgerond. Hartelijk dank voor uw vertrouwen en veel woongenot!`,
-        status: "concept",
-        trigger_event: "Deal gesloten - gefeliciteerd",
-        scheduled_at: null,
-      });
-    }
-    setClosing(false);
+    await supabase.from("deals").update({ invoice_created_at: new Date().toISOString(), invoice_created_by: userId }).eq("id", dealId);
+    await loadInvoice();
   }
+
+  async function markInMove() {
+    if (!userId) return;
+    const supabase = createClient();
+    await supabase.from("deals").update({ invoice_in_move: true, invoice_move_uploaded_at: new Date().toISOString(), invoice_move_uploaded_by: userId }).eq("id", dealId);
+    await loadInvoice();
+  }
+
+  async function markPaid() {
+    const supabase = createClient();
+    await supabase.from("deals").update({ invoice_paid: true, invoice_paid_at: new Date().toISOString() }).eq("id", dealId);
+    await loadInvoice();
+  }
+
+  const courtageExcl = (deal.agreed_price ?? 0) * 0.015;
+  const courtageIncl = courtageExcl * 1.21;
+  const fmt = (n: number) => "€ " + Math.round(n).toLocaleString("nl-NL");
+  const fmtNl = (d: string | null) => d ? new Date(d).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" }) : null;
+
+  const daysUntilTransfer = deal.transfer_date
+    ? Math.ceil((new Date(deal.transfer_date).getTime() - Date.now()) / 86400000)
+    : null;
+
+  const btnPrimary: React.CSSProperties = { padding: "8px 16px", background: "#0284c7", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "DM Sans, Helvetica Neue, sans-serif" };
+  const btnOrange: React.CSSProperties  = { ...btnPrimary, background: "#f97316" };
+  const btnGhost:  React.CSSProperties  = { ...btnPrimary, background: "#fff", color: "#64748b", border: "1px solid #e8ecf0" };
 
   return (
     <SectionWrap title="Overdracht">
-      {/* ── SECTION 1: Transport bij Notaris ── */}
+
+      {/* ── COURTAGE FACTUUR ── */}
       <Card>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
-          🏛 TRANSPORT BIJ NOTARIS
+        <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 14 }}>
+          Courtage factuur
         </div>
 
-        {/* Notary info */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
+        {/* Bedragen */}
+        <div style={{ display: "flex", gap: 24, marginBottom: 20, padding: "12px 14px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e8ecf0" }}>
           <div>
-            <div style={sectionLbl}>Notaris</div>
-            <div style={{ fontSize: 13, color: deal.notary_name ? "#0f172a" : "#94a3b8", padding: "9px 12px", border: "1px solid #e8ecf0", borderRadius: 8, background: "#f8fafc" }}>
-              {deal.notary_name ?? "Nog niet ingesteld"}
-            </div>
+            <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 2 }}>Excl. BTW</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{fmt(courtageExcl)}</div>
           </div>
           <div>
-            <div style={sectionLbl}>Datum transport</div>
-            <div style={{ fontSize: 13, color: deal.transfer_date ? "#0f172a" : "#94a3b8", padding: "9px 12px", border: "1px solid #e8ecf0", borderRadius: 8, background: "#f8fafc" }}>
-              {deal.transfer_date ? new Date(deal.transfer_date).toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" }) : "Nog niet ingesteld"}
-            </div>
-          </div>
-          <div>
-            <div style={sectionLbl}>Tijd</div>
-            <input
-              value={transferTime}
-              onChange={e => setTransferTime(e.target.value)}
-              onBlur={saveTransferTime}
-              placeholder="Bijv. 14:00"
-              style={sectionInp}
-            />
+            <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 2 }}>Incl. BTW (21%)</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{fmt(courtageIncl)}</div>
           </div>
         </div>
 
-        <div style={{ height: 1, background: "#f1f5f9", marginBottom: 14 }} />
+        {/* Timeline */}
+        <TimelineStep label="Stap 1 — Factuur aangemaakt" completed={!!inv.invoice_created_at}>
+          {inv.invoice_created_at ? (
+            <div style={{ fontSize: 12, color: "#16a34a", fontWeight: 500 }}>
+              ✓ Aangemaakt door {inv.created_by_name ?? "makelaar"}<br />
+              <span style={{ color: "#94a3b8", fontWeight: 400 }}>{fmtNl(inv.invoice_created_at)}</span>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>Nog niet aangemaakt</div>
+              <button onClick={markCreated} style={btnPrimary}>Aanmaken in WeFact →</button>
+            </div>
+          )}
+        </TimelineStep>
 
-        <div style={sectionLbl}>Notaris dossier checklist</div>
+        <TimelineStep label="Stap 2 — In Move.nl geplaatst" completed={!!inv.invoice_in_move} pending={!!inv.invoice_created_at && !inv.invoice_in_move}>
+          {inv.invoice_in_move ? (
+            <div style={{ fontSize: 12, color: "#16a34a", fontWeight: 500 }}>
+              ✓ Geüpload door {inv.move_by_name ?? "makelaar"}<br />
+              <span style={{ color: "#94a3b8", fontWeight: 400 }}>{fmtNl(inv.invoice_move_uploaded_at)}</span><br />
+              <span style={{ color: "#94a3b8", fontWeight: 400 }}>Notaris kan factuur inzien</span>
+            </div>
+          ) : inv.invoice_created_at ? (
+            <div>
+              <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>Nog niet gedeeld met notaris</div>
+              <button onClick={markInMove} style={btnOrange}>Markeer als geüpload →</button>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: "#d1d5db" }}>Volgt na aanmaken factuur</div>
+          )}
+        </TimelineStep>
 
-        {NOTARIS_DOCUMENTS.map((doc, i) => (
-          <div key={doc.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < NOTARIS_DOCUMENTS.length - 1 ? "1px solid #f8fafc" : "none" }}>
-            <input
-              type="checkbox"
-              checked={!!notarisChecked[doc.id]}
-              onChange={() => toggleNotarisDoc(doc.id)}
-              style={{ accentColor: "#0284c7", width: 16, height: 16, flexShrink: 0, cursor: "pointer" }}
-            />
-            <span style={{ fontSize: 13, color: notarisChecked[doc.id] ? "#94a3b8" : "#0f172a", textDecoration: notarisChecked[doc.id] ? "line-through" : "none", flex: 1 }}>
-              {doc.label}
-            </span>
-            <span style={{ fontSize: 9, background: "#f1f5f9", color: "#64748b", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>
-              {doc.source}
-            </span>
-            {doc.required && !notarisChecked[doc.id] && (
-              <span style={{ fontSize: 9, background: "#fef2f2", color: "#dc2626", borderRadius: 4, padding: "1px 6px", flexShrink: 0 }}>
-                Verplicht
-              </span>
+        <TimelineStep label="Stap 3 — Notaris geïnformeerd" completed={!!inv.invoice_in_move}>
+          {inv.invoice_in_move ? (
+            <div style={{ fontSize: 12, color: "#16a34a", fontWeight: 500 }}>
+              ✓ Notaris ontvangt factuur automatisch via Move.nl
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: "#d1d5db" }}>Volgt na upload naar Move.nl</div>
+          )}
+        </TimelineStep>
+
+        <TimelineStep label="Stap 4 — Courtage ontvangen" completed={!!inv.invoice_paid} last>
+          {inv.invoice_paid ? (
+            <div style={{ fontSize: 12, color: "#16a34a", fontWeight: 500 }}>
+              ✓ Ontvangen op {fmtNl(inv.invoice_paid_at)}<br />
+              <span style={{ color: "#94a3b8", fontWeight: 400 }}>Via: WeFact</span>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>Wordt geboekt bij transport</div>
+              <button onClick={markPaid} style={btnGhost}>Markeer als ontvangen</button>
+            </div>
+          )}
+        </TimelineStep>
+      </Card>
+
+      {/* ── NOTARIS ── */}
+      <Card>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 14 }}>
+          Notaris
+        </div>
+
+        {deal.notary_name ? (
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", marginBottom: 12 }}>{deal.notary_name}</div>
+        ) : (
+          <div style={{ fontSize: 13, color: "#94a3b8", fontStyle: "italic", marginBottom: 12 }}>Nog geen notaris gekoppeld</div>
+        )}
+
+        {deal.transfer_date && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: 8, marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 2 }}>Overdracht datum</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#0f172a" }}>
+                {fmtNl(deal.transfer_date)}
+              </div>
+            </div>
+            {daysUntilTransfer !== null && (
+              <div style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: daysUntilTransfer <= 7 ? "#ef4444" : daysUntilTransfer <= 14 ? "#f97316" : "#94a3b8" }}>
+                Over {daysUntilTransfer} dag{daysUntilTransfer === 1 ? "" : "en"}{daysUntilTransfer <= 7 ? " ⚠️" : ""}
+              </div>
             )}
           </div>
-        ))}
+        )}
 
-        {/* Progress bar */}
-        <div style={{ marginTop: 14, marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6 }}>
-            {checkedTotal} van {NOTARIS_DOCUMENTS.length} documenten aanwezig
+        {!deal.transfer_date && (
+          <div style={{ padding: "10px 14px", background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: 8, marginBottom: 12, fontSize: 13, color: "#94a3b8" }}>
+            Overdracht datum nog niet ingesteld
           </div>
-          <div style={{ height: 6, background: "#f1f5f9", borderRadius: 3, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${(checkedTotal / NOTARIS_DOCUMENTS.length) * 100}%`, background: "#0284c7", borderRadius: 3, transition: "width 0.3s" }} />
-          </div>
+        )}
+
+        <div style={{ fontSize: 10, color: "#94a3b8", fontStyle: "italic", lineHeight: 1.6 }}>
+          Notaris wordt automatisch gekoppeld via Move.nl zodra koper een notaris selecteert in hun dossier.
         </div>
-
-        {/* Status banner */}
-        {allRequiredChecked ? (
-          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: "#16a34a", fontWeight: 500 }}>
-            ✓ Notaris dossier compleet — klaar voor transport
-          </div>
-        ) : (
-          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: "#dc2626", fontWeight: 500 }}>
-            ⚠️ {requiredDocs.length - checkedRequired.length} verplichte documenten ontbreken — transport nog niet mogelijk
-          </div>
-        )}
-
-        {notarisToast && (
-          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "8px 14px", marginBottom: 10, fontSize: 12, color: "#16a34a" }}>
-            ✓ {notarisToast}
-          </div>
-        )}
-
-        <button
-          onClick={sendNotarisPackage}
-          disabled={!allRequiredChecked}
-          style={{ background: allRequiredChecked ? "#0284c7" : "#e2e8f0", color: allRequiredChecked ? "#fff" : "#94a3b8", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 12, fontWeight: 600, cursor: allRequiredChecked ? "pointer" : "not-allowed", transition: "all 0.15s" }}
-        >
-          📨 Stuur pakket naar notaris
-        </button>
       </Card>
 
-      {/* ── SECTION 2: Overdracht & Eindopname ── */}
-      <Card>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
-          🔑 OVERDRACHT &amp; EINDOPNAME
-        </div>
-
-        {/* Meterstanden */}
-        <div style={sectionLbl}>Meterstanden</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-          {[
-            { label: "GAS (m³)",            value: meterGas,   set: setMeterGas   },
-            { label: "WATER (m³)",          value: meterWater, set: setMeterWater },
-            { label: "ELEKTRICITEIT (kWh)", value: meterElec,  set: setMeterElec  },
-            { label: "WARMTE (GJ)",         value: meterWarm,  set: setMeterWarm  },
-          ].map(f => (
-            <div key={f.label}>
-              <div style={sectionLbl}>{f.label}</div>
-              <input
-                type="number"
-                value={f.value}
-                onChange={e => f.set(e.target.value)}
-                placeholder="0"
-                style={{ ...sectionInp, fontSize: 14 }}
-              />
-            </div>
-          ))}
-        </div>
-        <button
-          onClick={saveMeters}
-          style={{ background: meterSaved ? "#16a34a" : "#0284c7", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", marginBottom: 20, transition: "background 0.2s" }}
-        >
-          {meterSaved ? "Opgeslagen ✓" : "Opslaan meterstanden"}
-        </button>
-
-        {/* Foto's eindopname */}
-        <div style={sectionLbl}>Foto&apos;s eindopname</div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <span style={{ fontSize: 11, color: "#94a3b8" }}>{photos.length} foto&apos;s toegevoegd</span>
-          <label style={{ background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, color: "#0284c7", cursor: "pointer" }}>
-            📷 Foto toevoegen
-            <input type="file" accept="image/*" capture="environment" multiple onChange={handlePhotoUpload} style={{ display: "none" }} />
-          </label>
-        </div>
-        {photos.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 20 }}>
-            {photos.map((p, i) => (
-              <div key={i}>
-                <img src={p.src} alt={p.name} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8, display: "block" }} />
-                <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Sleuteloverdracht */}
-        <div style={sectionLbl}>Sleuteloverdracht</div>
-        {SLEUTEL_ITEMS.map((item, i) => (
-          <div key={item} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < SLEUTEL_ITEMS.length - 1 ? "1px solid #f8fafc" : "none" }}>
-            <input
-              type="checkbox"
-              checked={!!sleutelChecked[item]}
-              onChange={() => toggleSleutel(item)}
-              style={{ accentColor: "#0284c7", width: 16, height: 16, flexShrink: 0, cursor: "pointer" }}
-            />
-            <span style={{ fontSize: 13, color: sleutelChecked[item] ? "#94a3b8" : "#0f172a", textDecoration: sleutelChecked[item] ? "line-through" : "none" }}>
-              {item}
-            </span>
-          </div>
-        ))}
-
-        {/* Completion banner */}
-        {overdrachtCompleet && (
-          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: 16, marginTop: 16 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#16a34a", marginBottom: 4 }}>🎉 Overdracht compleet!</div>
-            <div style={{ fontSize: 12, color: "#16a34a", marginBottom: 14 }}>Deal wordt gemarkeerd als Gesloten</div>
-            <button
-              onClick={handleSluitDeal}
-              disabled={closing}
-              style={{ width: "100%", background: "#16a34a", color: "#fff", border: "none", borderRadius: 10, padding: 12, fontSize: 14, fontWeight: 700, cursor: closing ? "not-allowed" : "pointer", opacity: closing ? 0.7 : 1 }}
-            >
-              {closing ? "Bezig…" : "Deal sluiten"}
-            </button>
-          </div>
-        )}
-      </Card>
     </SectionWrap>
   );
 }
