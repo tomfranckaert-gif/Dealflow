@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -372,6 +372,7 @@ interface Props {
 
 export default function PipelinePage({ deals }: Props) {
   const router = useRouter();
+  const alertsRef = useRef<HTMLDivElement>(null);
   const [activeFilter, setActiveFilter] = useState<DealStage | "alle">("alle");
   const [search, setSearch] = useState("");
   const [bellOpen, setBellOpen] = useState(false);
@@ -564,12 +565,30 @@ export default function PipelinePage({ deals }: Props) {
       {/* Stats row — fixed below topbar */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e8ecf0", display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", flexShrink: 0 }}>
         {[
-          { label: "Actieve deals",     value: activeCount,            sub: "In behandeling" },
-          { label: "Pipeline waarde",   value: formatEuro(totalValue), sub: "Excl. gesloten" },
-          { label: "Gesloten",          value: wonCount,               sub: "Dit jaar" },
-          { label: "Urgente deadlines", value: urgentCount,            sub: "Binnen 7 dagen" },
+          {
+            label: "Actieve deals",     value: activeCount,            sub: "In behandeling",
+            onClick: () => router.push("/dashboard"),
+          },
+          {
+            label: "Pipeline waarde",   value: formatEuro(totalValue), sub: "Excl. gesloten",
+            onClick: null as (() => void) | null,
+          },
+          {
+            label: "Gesloten",          value: wonCount,               sub: "Dit jaar",
+            onClick: () => router.push("/dashboard/statistieken"),
+          },
+          {
+            label: "Urgente deadlines", value: urgentCount,            sub: "Binnen 7 dagen",
+            onClick: () => alertsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+          },
         ].map((s, i) => (
-          <div key={s.label} style={{ padding: "16px 24px", borderRight: i < 3 ? "1px solid #e8ecf0" : "none" }}>
+          <div
+            key={s.label}
+            onClick={s.onClick ?? undefined}
+            style={{ padding: "16px 24px", borderRight: i < 3 ? "1px solid #e8ecf0" : "none", cursor: s.onClick ? "pointer" : "default", transition: "border-color 0.15s, transform 0.15s, box-shadow 0.15s" }}
+            onMouseEnter={(e) => { if (s.onClick) { e.currentTarget.style.borderColor = "#0284c7"; e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; } }}
+            onMouseLeave={(e) => { if (s.onClick) { e.currentTarget.style.borderColor = i < 3 ? "#e8ecf0" : ""; e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; } }}
+          >
             <div style={{ fontSize: "11px", fontWeight: "500", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>{s.label}</div>
             <div style={{ fontSize: "20px", fontWeight: "700", color: "#0f172a", letterSpacing: "-0.5px", marginBottom: "2px" }}>{s.value}</div>
             <div style={{ fontSize: "11px", color: "#94a3b8" }}>{s.sub}</div>
@@ -581,7 +600,7 @@ export default function PipelinePage({ deals }: Props) {
       <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
 
         {/* KRITIEK alerts */}
-        <div style={{ background: "#f8fafc", padding: "0 24px" }}>
+        <div ref={alertsRef} style={{ background: "#f8fafc", padding: "0 24px" }}>
           <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: 12, padding: "16px 20px", marginBottom: 16 }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", marginBottom: 12, color: alerts.length > 0 ? "#ef4444" : "#16a34a" }}>
               {alerts.length > 0 ? `KRITIEK — ${alerts.length} ACTIE${alerts.length === 1 ? "" : "S"} VEREIST` : "KRITIEK — ALLES OP SCHEMA"}
