@@ -106,14 +106,10 @@ export default function DirecteurPage() {
   const memberViewings = TEAM.map((_, i) => viewings.filter((_, idx) => idx % 5 === i));
 
   const totalValue    = deals.reduce((s, d) => s + (d.agreed_price ?? d.asking_price ?? 0), 0);
-  const totalCourtage = totalValue * 0.015;
+  const totalCourtage = deals.reduce((s, d) => s + ((d.agreed_price ?? d.asking_price ?? 0) * 0.015), 0);
   const voorwaarden   = deals.filter(d => d.stage === "voorwaarden").length;
+  const geslotenDeals = deals.filter(d => d.stage === "gesloten").length;
   const maxDeals      = Math.max(...memberDeals.map(m => m.length), 1);
-
-  const healthLabel = (n: number) =>
-    n >= 4 ? { label: "Goed",  bg: "#dcfce7", color: "#15803d" }
-    : n >= 2 ? { label: "Matig", bg: "#fef9c3", color: "#a16207" }
-    :          { label: "Laag",  bg: "#fee2e2", color: "#dc2626" };
 
   if (loading) return (
     <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
@@ -142,7 +138,7 @@ export default function DirecteurPage() {
             { label: "Pipeline waarde",   value: fmt(totalValue),     sub: "totale verkoopwaarde", accent: "#7c3aed", href: null },
             { label: "Courtage (1,5%)",   value: fmt(totalCourtage),  sub: "verwachte omzet",      accent: "#16a34a", href: null },
             { label: "Voorwaarden deals", value: voorwaarden,         sub: "actiepunten vandaag",  accent: voorwaarden > 0 ? "#dc2626" : "#64748b", href: "/dashboard?filter=Voorwaarden" },
-            { label: "Gem. health",       value: "85%",               sub: "kantoorscore",         accent: "#f97316", href: null },
+            { label: "Gesloten deals",    value: geslotenDeals,       sub: "afgeronde trajecten",  accent: "#16a34a", href: null },
           ].map(({ label, value, sub, accent, href }) => (
             <div
               key={label}
@@ -170,7 +166,7 @@ export default function DirecteurPage() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {["Makelaar", "Deals", "Pipeline waarde", "Courtage", "Prestatie", "Health"].map(h => (
+                {["Makelaar", "Deals", "Pipeline waarde", "Courtage", "Prestatie"].map(h => (
                   <th key={h} style={thStyle}>{h}</th>
                 ))}
               </tr>
@@ -180,7 +176,6 @@ export default function DirecteurPage() {
                 const md    = memberDeals[i];
                 const val   = md.reduce((s, d) => s + (d.agreed_price ?? d.asking_price ?? 0), 0);
                 const pct   = Math.round((md.length / maxDeals) * 100);
-                const hl    = healthLabel(md.length);
                 return (
                   <tr
                     key={member.id}
@@ -208,11 +203,6 @@ export default function DirecteurPage() {
                         <span style={{ fontSize: 11, color: "#64748b", minWidth: 30 }}>{pct}%</span>
                       </div>
                     </td>
-                    <td style={tdStyle}>
-                      <span style={{ fontSize: 11, fontWeight: 600, background: hl.bg, color: hl.color, borderRadius: 6, padding: "3px 8px" }}>
-                        {hl.label}
-                      </span>
-                    </td>
                   </tr>
                 );
               })}
@@ -223,7 +213,7 @@ export default function DirecteurPage() {
                 <td style={{ ...tdStyle, fontWeight: 700, color: "#0f172a", borderTop: "2px solid #e8ecf0" }}>{deals.length}</td>
                 <td style={{ ...tdStyle, fontWeight: 700, color: "#0f172a", borderTop: "2px solid #e8ecf0" }}>{fmt(totalValue)}</td>
                 <td style={{ ...tdStyle, fontWeight: 700, color: "#16a34a", borderTop: "2px solid #e8ecf0" }}>{fmt(totalCourtage)}</td>
-                <td style={{ borderTop: "2px solid #e8ecf0" }} colSpan={2} />
+                <td style={{ borderTop: "2px solid #e8ecf0" }} />
               </tr>
             </tfoot>
           </table>
