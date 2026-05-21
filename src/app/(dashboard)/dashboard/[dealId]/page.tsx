@@ -1704,6 +1704,10 @@ function daysSince(d: string) {
   return Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
 }
 
+function daysUntil(d: string) {
+  return Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
+}
+
 function Avatar({ name, color }: { name: string; color: string }) {
   const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   return (
@@ -2175,48 +2179,270 @@ interface NextAction {
   cta: string;
   color: string;
   href?: string;
-  action?: string;
+  section?: string;
 }
 
 function getNextActions(stage: string): NextAction[] {
   const s = stage?.toLowerCase();
-
   if (s === "lead") return [
-    { nr: 1, title: "Bezichtiging inplannen",       sub: "Plan een tijdslot in Realworks",       cta: "Open Realworks →",    color: "#0284c7", href: "https://crm.realworks.nl" },
-    { nr: 2, title: "Welkomst WhatsApp verkoper",   sub: "Stel jezelf voor als makelaar",         cta: "Genereer bericht →",  color: "#16a34a", action: "whatsapp" },
-    { nr: 3, title: "Foto's bestellen bij Zibber",  sub: "Fotograaf inplannen voor publicatie",   cta: "Bestel bij Zibber →", color: "#7c3aed", href: "https://myzibber.nl" },
+    { nr: 1, title: "Bezichtiging inplannen",         sub: "Plan een tijdslot in Realworks",                   cta: "Open Realworks →",    color: "#0284c7", href: "https://crm.realworks.nl" },
+    { nr: 2, title: "Welkomst WhatsApp verkoper",     sub: "Stel jezelf voor als makelaar",                    cta: "Naar WhatsApp →",     color: "#16a34a", section: "whatsapp" },
+    { nr: 3, title: "Foto's bestellen bij Zibber",   sub: "Fotograaf inplannen voor publicatie",               cta: "Open Zibber →",       color: "#7c3aed", href: "https://myzibber.nl" },
   ];
   if (s === "bezichtiging") return [
-    { nr: 1, title: "Bezichtiging feedback loggen", sub: "Na elke bezichtiging — 30 seconden",    cta: "Log feedback →",      color: "#0284c7", action: "bezichtigingen" },
-    { nr: 2, title: "Weekrapport naar verkoper",    sub: "Houd verkoper op de hoogte",             cta: "Genereer rapport →",  color: "#16a34a", action: "verkoper" },
-    { nr: 3, title: "Move.nl voortgang checken",    sub: "Zijn alle partijen actief?",             cta: "Open Move.nl →",      color: "#f97316", href: "https://move.nl" },
+    { nr: 1, title: "Bezichtiging feedback loggen",   sub: "Na elke bezichtiging — 30 seconden",               cta: "Log feedback →",      color: "#0284c7", section: "bezichtigingen" },
+    { nr: 2, title: "Weekrapport naar verkoper",      sub: "Houd verkoper op de hoogte",                       cta: "Genereer rapport →",  color: "#16a34a", section: "verkoper" },
+    { nr: 3, title: "Move.nl voortgang checken",      sub: "Zijn vragenlijst en documenten ingevuld?",         cta: "Open Move.nl →",      color: "#f97316", href: "https://move.nl" },
   ];
   if (s === "bod") return [
-    { nr: 1, title: "Biedingen bekijken",           sub: "Biedlogboek via Move.nl",               cta: "Open Move.nl →",      color: "#0284c7", href: "https://move.nl" },
-    { nr: 2, title: "Verkoper informeren over bod", sub: "AI bericht klaar voor goedkeuring",     cta: "Stuur WhatsApp →",    color: "#16a34a", action: "whatsapp" },
-    { nr: 3, title: "Tegenvoorstel opstellen",      sub: "Onderhandelingsstrategie bepalen",       cta: "Genereer concept →",  color: "#7c3aed", action: "whatsapp" },
+    { nr: 1, title: "Biedingen bekijken",             sub: "Biedlogboek via Move.nl",                          cta: "Open Move.nl →",      color: "#0284c7", href: "https://move.nl" },
+    { nr: 2, title: "Verkoper informeren over bod",   sub: "AI bericht klaar voor goedkeuring",                cta: "Stuur WhatsApp →",    color: "#16a34a", section: "whatsapp" },
+    { nr: 3, title: "Koopakte voorbereiden in RW",    sub: "Zodra overeenstemming bereikt",                    cta: "Open Realworks →",    color: "#7c3aed", href: "https://crm.realworks.nl" },
   ];
   if (s === "koopakte") return [
-    { nr: 1, title: "Koopakte opstellen in Realworks", sub: "NVM template gebruiken",             cta: "Open Realworks →",    color: "#0284c7", href: "https://crm.realworks.nl" },
-    { nr: 2, title: "Wwft verificatie starten",    sub: "Verplicht voor koopakte fase",            cta: "Start Wwft →",        color: "#ef4444", action: "wwft" },
-    { nr: 3, title: "Tekenafspraak plannen",        sub: "Koper en verkoper uitnodigen",            cta: "Plan afspraak →",     color: "#16a34a", href: "https://crm.realworks.nl" },
+    { nr: 1, title: "Koopakte opstellen in Realworks", sub: "NVM template gebruiken",                          cta: "Open Realworks →",    color: "#0284c7", href: "https://crm.realworks.nl" },
+    { nr: 2, title: "Wwft verificatie starten",       sub: "Verplicht voor koopakte fase",                     cta: "Start Wwft →",        color: "#ef4444", section: "wwft" },
+    { nr: 3, title: "Tekenafspraak plannen",           sub: "Koper en verkoper uitnodigen",                    cta: "Open Realworks →",    color: "#16a34a", href: "https://crm.realworks.nl" },
   ];
   if (s === "voorwaarden") return [
-    { nr: 1, title: "Financieringsdeadline bewaken", sub: "Follow-up bij hypotheekadviseur",      cta: "Bekijk deadlines →",  color: "#ef4444", action: "voorwaarden" },
-    { nr: 2, title: "Bouwkundige keuring inplannen", sub: "Indien van toepassing",                cta: "Plan keuring →",      color: "#f97316", href: "https://crm.realworks.nl" },
-    { nr: 3, title: "Verkoper informeren voortgang", sub: "Wekelijkse update verkoper",            cta: "Stuur update →",      color: "#16a34a", action: "whatsapp" },
+    { nr: 1, title: "Financieringsdeadline bewaken",  sub: "Follow-up bij hypotheekadviseur",                  cta: "Bekijk deadlines →",  color: "#ef4444", section: "voorwaarden" },
+    { nr: 2, title: "Bouwkundige keuring plannen",    sub: "Indien van toepassing",                            cta: "Open Realworks →",    color: "#f97316", href: "https://crm.realworks.nl" },
+    { nr: 3, title: "Verkoper informeren voortgang",  sub: "Wekelijkse update",                                cta: "Stuur WhatsApp →",    color: "#16a34a", section: "whatsapp" },
   ];
   if (s === "financiering") return [
-    { nr: 1, title: "Hypotheek akkoord bevestigen", sub: "Markeer als ontvangen",                 cta: "Bevestig akkoord →",  color: "#0284c7", action: "voorwaarden" },
-    { nr: 2, title: "Notaris informeren",           sub: "Stuur dossier naar notaris",             cta: "Open Move.nl →",      color: "#16a34a", href: "https://move.nl" },
-    { nr: 3, title: "Transportdatum bevestigen",    sub: "Datum afstemmen met notaris",            cta: "Bevestig datum →",    color: "#7c3aed", action: "overdracht" },
+    { nr: 1, title: "Hypotheek akkoord bevestigen",   sub: "Bank bevestiging ontvangen?",                      cta: "Markeer akkoord →",   color: "#0284c7", section: "voorwaarden" },
+    { nr: 2, title: "Notaris informeren",             sub: "Stuur dossier via Move.nl",                        cta: "Open Move.nl →",      color: "#16a34a", href: "https://move.nl" },
+    { nr: 3, title: "Transportdatum bevestigen",      sub: "Afstemmen met notaris",                            cta: "Bekijk overdracht →", color: "#7c3aed", section: "overdracht" },
   ];
   if (s === "overdracht") return [
-    { nr: 1, title: "Courtage factuur in Move.nl",  sub: "Notaris heeft factuur nodig",           cta: "Controleer factuur →", color: "#ef4444", action: "overdracht" },
-    { nr: 2, title: "Eindopname inplannen",         sub: "2 weken voor transport",                 cta: "Plan eindopname →",   color: "#f97316", href: "https://crm.realworks.nl" },
-    { nr: 3, title: "Koper informeren over transport", sub: "Datum, tijd, notaris adres",          cta: "Stuur WhatsApp →",    color: "#16a34a", action: "whatsapp" },
+    { nr: 1, title: "Courtage factuur in Move.nl",    sub: "Notaris heeft factuur nodig voor transport",       cta: "Controleer →",        color: "#ef4444", section: "overdracht" },
+    { nr: 2, title: "Eindopname inplannen in RW",     sub: "2 weken voor transport",                           cta: "Open Realworks →",    color: "#f97316", href: "https://crm.realworks.nl" },
+    { nr: 3, title: "Koper informeren over transport", sub: "Datum, tijd en notarisadres sturen",              cta: "Stuur WhatsApp →",    color: "#16a34a", section: "whatsapp" },
+  ];
+  if (s === "gesloten") return [
+    { nr: 1, title: "Review vragen aan koper",        sub: "Stuur verzoek via WhatsApp",                       cta: "Stuur verzoek →",     color: "#0284c7", section: "whatsapp" },
+    { nr: 2, title: "Jubileum inplannen",             sub: "Automatisch over 1 jaar",                          cta: "Bekijk relaties →",   color: "#7c3aed", href: "/dashboard/relaties" },
+    { nr: 3, title: "Dossier archiveren in RW",       sub: "Zet status op overgedragen",                       cta: "Open Realworks →",    color: "#16a34a", href: "https://crm.realworks.nl" },
   ];
   return [];
+}
+
+function OverviewSection({
+  deal,
+  dealId,
+  currentStage,
+  days,
+  setActiveNav,
+}: {
+  deal: DealWithContacts;
+  dealId: string;
+  currentStage: DealStage;
+  days: number;
+  setActiveNav: (nav: SubNav) => void;
+}) {
+  const [recentMessages, setRecentMessages] = useState<{ created_at: string }[] | null>(null);
+  const [viewingCount, setViewingCount] = useState<number>(0);
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient();
+      const [msgRes, viewRes] = await Promise.all([
+        supabase.from("messages").select("created_at").eq("deal_id", dealId).order("created_at", { ascending: false }).limit(1),
+        supabase.from("viewings").select("*", { count: "exact", head: true }).eq("deal_id", dealId),
+      ]);
+      setRecentMessages(msgRes.data ?? []);
+      setViewingCount(viewRes.count ?? 0);
+    }
+    load();
+  }, [dealId]);
+
+  const actions = getNextActions(currentStage);
+  const price = deal.agreed_price ?? deal.asking_price;
+  const isAgreed = ["bod", "koopakte", "voorwaarden", "financiering", "overdracht", "gesloten"].includes(currentStage?.toLowerCase());
+  const invoiceInMove = (deal as unknown as Record<string, unknown>).invoice_in_move as boolean | null;
+  const lastMsg = recentMessages?.[0];
+  const contactDays = lastMsg ? daysSince(lastMsg.created_at) : daysSince(deal.created_at);
+
+  function contactBadge(d: number) {
+    if (d < 3) return <span style={{ fontSize: "11px", color: "#16a34a" }}>Laatste contact: recent ✓</span>;
+    if (d < 7) return <span style={{ fontSize: "11px", color: "#f97316" }}>Laatste contact: {d} dagen geleden</span>;
+    return <span style={{ fontSize: "11px", color: "#ef4444" }}>Laatste contact: {d} dagen geleden ⚠️</span>;
+  }
+
+  return (
+    <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>
+
+      {/* Compact stat pills */}
+      <div style={{ display: "flex", gap: "8px", marginBottom: "4px" }}>
+        {[
+          { label: "Koopsom",  value: price != null ? formatEuro(price) : "—" },
+          { label: "Looptijd", value: `${days} dagen` },
+          { label: "Status",   value: STAGES.find((s) => s.id === currentStage)?.label ?? "—" },
+        ].map((stat) => (
+          <div key={stat.label} style={{ background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: "8px", padding: "6px 14px" }}>
+            <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.6px" }}>{stat.label}</div>
+            <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{stat.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Section 1: Wat moet nu gebeuren */}
+      {actions.length > 0 && (
+        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px" }}>
+          <div style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "14px" }}>Wat moet nu gebeuren?</div>
+          {actions.map((action, i) => (
+            <div
+              key={action.nr}
+              style={{ display: "flex", alignItems: "center", gap: "14px", padding: "12px 0", borderBottom: i < actions.length - 1 ? "1px solid #f8fafc" : "none", cursor: "pointer" }}
+              onClick={() => { if (action.href) window.open(action.href, "_blank"); else if (action.section) setActiveNav(action.section as SubNav); }}
+            >
+              <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: action.color + "15", color: action.color, fontSize: "12px", fontWeight: "700", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                {action.nr}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{action.title}</div>
+                <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>{action.sub}</div>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); if (action.href) window.open(action.href, "_blank"); else if (action.section) setActiveNav(action.section as SubNav); }}
+                style={{ background: action.color + "10", border: "1px solid " + action.color + "25", color: action.color, fontSize: "11px", fontWeight: "600", padding: "5px 12px", borderRadius: "6px", whiteSpace: "nowrap", cursor: "pointer", flexShrink: 0 }}
+              >
+                {action.cta}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Section 2: 3 cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+
+        {/* Verkoper card */}
+        <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px", display: "flex", flexDirection: "column" }}>
+          <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "10px" }}>Verkoper</div>
+          {deal.seller ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#7c3aed", color: "#fff", fontWeight: "700", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {deal.seller.name.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{deal.seller.name}</div>
+              </div>
+              {deal.seller.phone && <a href={`tel:${deal.seller.phone}`} style={{ fontSize: "12px", color: "#64748b", textDecoration: "none", marginBottom: "4px" }}>{deal.seller.phone}</a>}
+              {deal.seller.email && <a href={`mailto:${deal.seller.email}`} style={{ fontSize: "12px", color: "#64748b", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: "4px" }}>{deal.seller.email}</a>}
+              <div style={{ marginTop: "10px" }}>{contactBadge(contactDays)}</div>
+              <div style={{ fontSize: "10px", color: "#94a3b8", marginTop: "4px" }}>Move.nl: voortgang gesynchroniseerd</div>
+              <button onClick={() => setActiveNav("whatsapp")} style={{ marginTop: "12px", background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "8px 0", fontSize: "12px", fontWeight: "600", cursor: "pointer", width: "100%", textAlign: "center" }}>
+                WhatsApp
+              </button>
+            </>
+          ) : (
+            <div style={{ fontSize: "11px", color: "#94a3b8", fontStyle: "italic" }}>Nog geen verkoper gekoppeld</div>
+          )}
+        </div>
+
+        {/* Object card */}
+        {(() => {
+          const td = deal.transfer_date ? daysUntil(deal.transfer_date) : null;
+          return (
+            <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px", display: "flex", flexDirection: "column" }}>
+              <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "10px" }}>Object</div>
+              {deal.property_type && <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a", textTransform: "capitalize", marginBottom: "4px" }}>{deal.property_type}</div>}
+              {(deal.city || deal.postcode) && <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "4px" }}>{[deal.postcode, deal.city].filter(Boolean).join(" ")}</div>}
+              {price != null && (
+                <div style={{ marginTop: "10px" }}>
+                  <div style={{ fontSize: "9px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "2px" }}>{isAgreed ? "Koopsom" : "Vraagprijs"}</div>
+                  <div style={{ fontSize: "18px", fontWeight: "700", color: "#0284c7", letterSpacing: "-0.4px" }}>{formatEuro(price)}</div>
+                </div>
+              )}
+              {deal.transfer_date && td !== null && (
+                <div style={{ marginTop: "10px" }}>
+                  <div style={{ fontSize: "9px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>Overdracht</div>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a", marginBottom: "4px" }}>{formatDate(deal.transfer_date)}</div>
+                  <span style={{ display: "inline-block", fontSize: "10px", fontWeight: "600", padding: "2px 8px", borderRadius: "20px", background: td <= 14 ? "#fef2f2" : td <= 30 ? "#fff7ed" : "#f1f5f9", color: td <= 14 ? "#ef4444" : td <= 30 ? "#f97316" : "#64748b" }}>
+                    Over {td} dagen
+                  </span>
+                </div>
+              )}
+              <div style={{ marginTop: "10px", fontSize: "11px", color: "#94a3b8" }}>
+                {viewingCount === 0 ? "Nog geen bezichtigingen" : `${viewingCount} bezichtiging(en) geweest`}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Notaris card */}
+        {(() => {
+          const td = deal.transfer_date ? daysUntil(deal.transfer_date) : null;
+          return (
+            <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px", display: "flex", flexDirection: "column" }}>
+              <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "10px" }}>Notaris</div>
+              {deal.notary_name ? (
+                <>
+                  <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>{deal.notary_name}</div>
+                  {deal.transfer_date && td !== null && (
+                    <div style={{ fontSize: "12px", color: td <= 14 ? "#ef4444" : td <= 30 ? "#f97316" : "#64748b", marginBottom: "8px" }}>
+                      Transport over {td} dagen
+                    </div>
+                  )}
+                  <div style={{ marginTop: "10px" }}>
+                    <span style={{ display: "inline-block", fontSize: "11px", fontWeight: "600", padding: "4px 10px", borderRadius: "6px", background: invoiceInMove ? "#f0fdf4" : "#fef2f2", color: invoiceInMove ? "#16a34a" : "#ef4444", border: `1px solid ${invoiceInMove ? "#bbf7d0" : "#fecaca"}` }}>
+                      {invoiceInMove ? "Factuur in Move.nl ✓" : "Factuur ontbreekt ✗"}
+                    </span>
+                  </div>
+                  <button onClick={() => window.open("https://move.nl")} style={{ marginTop: "12px", background: "#f0f9ff", color: "#0284c7", border: "1px solid #bae6fd", borderRadius: "8px", padding: "8px 0", fontSize: "12px", fontWeight: "600", cursor: "pointer", width: "100%", textAlign: "center" }}>
+                    Open Move.nl →
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: "11px", color: "#94a3b8", fontStyle: "italic" }}>Nog geen notaris gekoppeld</div>
+                  <div style={{ fontSize: "10px", color: "#94a3b8", marginTop: "6px" }}>Koper selecteert notaris via Move.nl</div>
+                </>
+              )}
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Section 3: Koper */}
+      {(() => {
+        const isEarly = ["lead", "bezichtiging"].includes(currentStage?.toLowerCase());
+        if (isEarly && !deal.buyer) {
+          return (
+            <div style={{ background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px", display: "flex", alignItems: "center", gap: "12px" }}>
+              <div style={{ fontSize: "24px" }}>👤</div>
+              <div>
+                <div style={{ fontSize: "13px", fontWeight: "600", color: "#64748b" }}>Nog geen koper in beeld</div>
+                <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px" }}>In de {STAGES.find((s) => s.id === currentStage)?.label} fase worden potentiële kopers gevonden via bezichtigingen</div>
+              </div>
+            </div>
+          );
+        }
+        if (!deal.buyer) return null;
+        return (
+          <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px", display: "flex", flexDirection: "column" }}>
+            <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "10px" }}>Koper</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+              <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "#0284c7", color: "#fff", fontWeight: "700", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                {deal.buyer.name.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{deal.buyer.name}</div>
+                {deal.buyer.partner_name && <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>& {deal.buyer.partner_name}</div>}
+              </div>
+            </div>
+            {deal.buyer.phone && <a href={`tel:${deal.buyer.phone}`} style={{ fontSize: "12px", color: "#64748b", textDecoration: "none", marginBottom: "4px" }}>{deal.buyer.phone}</a>}
+            {deal.buyer.email && <a href={`mailto:${deal.buyer.email}`} style={{ fontSize: "12px", color: "#64748b", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: "4px" }}>{deal.buyer.email}</a>}
+            <div style={{ marginTop: "10px" }}>{contactBadge(contactDays)}</div>
+            <button onClick={() => setActiveNav("whatsapp")} style={{ marginTop: "12px", background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "8px 0", fontSize: "12px", fontWeight: "600", cursor: "pointer", width: "100%", textAlign: "center" }}>
+              WhatsApp
+            </button>
+          </div>
+        );
+      })()}
+    </div>
+  );
 }
 
 export default function DealDetailPage() {
@@ -2504,198 +2730,7 @@ export default function DealDetailPage() {
 
         {/* Right content */}
         <div style={{ flex: 1, overflowY: "auto", background: "#f8fafc" }}>
-          {activeNav === "overzicht" && (
-            <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>
-
-              {/* Stat row */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
-                {[
-                  { label: "Koopsom",  value: (deal.agreed_price ?? deal.asking_price) != null ? formatEuro((deal.agreed_price ?? deal.asking_price)!) : "—" },
-                  { label: "Looptijd", value: `${days} dagen` },
-                  { label: "Status",   value: STAGES.find((s) => s.id === currentStage)?.label ?? "—" },
-                ].map((stat) => (
-                  <div key={stat.label} style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "10px", padding: "14px" }}>
-                    <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.7px", marginBottom: "6px" }}>{stat.label}</div>
-                    <div style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", letterSpacing: "-0.3px" }}>{stat.value}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Section 1: Wat moet nu gebeuren */}
-              {(() => {
-                const actions = getNextActions(currentStage);
-                if (!actions.length) return null;
-                return (
-                  <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "16px" }}>
-                    <div style={{ fontSize: "10px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "12px" }}>Wat moet nu gebeuren?</div>
-                    {actions.map((action, i) => (
-                      <div
-                        key={action.nr}
-                        style={{ display: "flex", alignItems: "center", gap: "14px", padding: "12px 0", borderBottom: i < actions.length - 1 ? "1px solid #f8fafc" : "none", cursor: "pointer" }}
-                        onClick={() => { if (action.href) window.open(action.href); else if (action.action) setActiveNav(action.action as SubNav); }}
-                      >
-                        <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: action.color + "15", color: action.color, fontSize: "13px", fontWeight: "700", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          {action.nr}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{action.title}</div>
-                          <div style={{ fontSize: "11px", color: "#94a3b8" }}>{action.sub}</div>
-                        </div>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); if (action.href) window.open(action.href); else if (action.action) setActiveNav(action.action as SubNav); }}
-                          style={{ background: action.color + "10", border: `1px solid ${action.color}30`, color: action.color, fontSize: "11px", fontWeight: "600", padding: "5px 12px", borderRadius: "6px", whiteSpace: "nowrap", cursor: "pointer", flexShrink: 0 }}
-                        >
-                          {action.cta}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-
-              {/* Section 2: 3 cards */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-
-                {/* Verkoper card */}
-                <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>Verkoper</div>
-                  {deal.seller ? (
-                    <>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "linear-gradient(135deg, #16a34a, #22c55e)", color: "#fff", fontWeight: "700", fontSize: "13px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          {deal.seller.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{deal.seller.name}</div>
-                          {deal.seller.partner_name && <div style={{ fontSize: "11px", color: "#94a3b8" }}>& {deal.seller.partner_name}</div>}
-                        </div>
-                      </div>
-                      {deal.seller.phone && <a href={`tel:${deal.seller.phone}`} style={{ fontSize: "12px", color: "#0284c7", textDecoration: "none" }}>{deal.seller.phone}</a>}
-                      {deal.seller.email && <a href={`mailto:${deal.seller.email}`} style={{ fontSize: "12px", color: "#64748b", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{deal.seller.email}</a>}
-                      {(() => {
-                        const d = daysSince(deal.created_at);
-                        if (d < 3) return <div style={{ fontSize: "11px", color: "#16a34a" }}>Recent contact ✓</div>;
-                        if (d < 7) return <div style={{ fontSize: "11px", color: "#f97316" }}>{d} dagen geleden</div>;
-                        return <div style={{ fontSize: "11px", color: "#ef4444" }}>{d} dagen geleden ⚠️</div>;
-                      })()}
-                      <div style={{ fontSize: "11px", color: "#f97316" }}>Voortgang: Nog 2 stappen</div>
-                      <button onClick={() => setActiveNav("whatsapp")} style={{ marginTop: "auto", padding: "8px", background: "#dcfce7", color: "#16a34a", border: "1px solid #bbf7d0", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
-                        WhatsApp
-                      </button>
-                    </>
-                  ) : (
-                    <div style={{ fontSize: "12px", color: "#94a3b8" }}>Geen verkoper gekoppeld</div>
-                  )}
-                </div>
-
-                {/* Object card */}
-                {(() => {
-                  const isAgreed = ["bod", "koopakte", "voorwaarden", "financiering", "overdracht", "gesloten"].includes(currentStage?.toLowerCase());
-                  const price = deal.agreed_price ?? deal.asking_price;
-                  const transferDays = deal.transfer_date ? Math.ceil((new Date(deal.transfer_date).getTime() - Date.now()) / 86400000) : null;
-                  return (
-                    <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                      <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>Object</div>
-                      {deal.property_type && <div style={{ fontSize: "12px", color: "#64748b" }}>{deal.property_type}</div>}
-                      {(deal.city || deal.postcode) && <div style={{ fontSize: "12px", color: "#64748b" }}>{[deal.postcode, deal.city].filter(Boolean).join(" ")}</div>}
-                      {price != null && (
-                        <div>
-                          <div style={{ fontSize: "9px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "2px" }}>{isAgreed ? "Koopsom" : "Vraagprijs"}</div>
-                          <div style={{ fontSize: "16px", fontWeight: "700", color: "#0284c7", letterSpacing: "-0.3px" }}>{formatEuro(price)}</div>
-                        </div>
-                      )}
-                      {deal.transfer_date && transferDays !== null && (
-                        <div>
-                          <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "4px" }}>{formatDate(deal.transfer_date)}</div>
-                          <span style={{ display: "inline-block", fontSize: "10px", fontWeight: "600", padding: "2px 8px", borderRadius: "10px", background: transferDays <= 14 ? "#fee2e2" : transferDays <= 30 ? "#ffedd5" : "#f1f5f9", color: transferDays <= 14 ? "#ef4444" : transferDays <= 30 ? "#f97316" : "#64748b" }}>
-                            Over {transferDays} dagen
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Notaris card */}
-                {(() => {
-                  const transferDays = deal.transfer_date ? Math.ceil((new Date(deal.transfer_date).getTime() - Date.now()) / 86400000) : null;
-                  const invoiceInMove = (deal as unknown as Record<string, unknown>).invoice_in_move as boolean | null;
-                  return (
-                    <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                      <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>Notaris</div>
-                      {deal.notary_name ? (
-                        <>
-                          <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{deal.notary_name}</div>
-                          {deal.transfer_date && transferDays !== null && (
-                            <div>
-                              <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "4px" }}>{formatDate(deal.transfer_date)}</div>
-                              <span style={{ display: "inline-block", fontSize: "10px", fontWeight: "600", padding: "2px 8px", borderRadius: "10px", background: transferDays <= 7 ? "#fee2e2" : transferDays <= 14 ? "#ffedd5" : "#f1f5f9", color: transferDays <= 7 ? "#ef4444" : transferDays <= 14 ? "#f97316" : "#94a3b8" }}>
-                                Over {transferDays} dagen
-                              </span>
-                            </div>
-                          )}
-                          {invoiceInMove != null && (
-                            <div style={{ fontSize: "11px", fontWeight: "600", color: invoiceInMove ? "#16a34a" : "#ef4444" }}>
-                              {invoiceInMove ? "Factuur in Move.nl ✓" : "Factuur ontbreekt ✗"}
-                            </div>
-                          )}
-                          <button onClick={() => window.open("https://move.nl")} style={{ marginTop: "auto", padding: "8px", background: "#f0f9ff", color: "#0284c7", border: "1px solid #bae6fd", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
-                            Open Move.nl →
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <div style={{ fontSize: "11px", color: "#94a3b8", fontStyle: "italic" }}>Nog geen notaris gekoppeld</div>
-                          <div style={{ fontSize: "10px", color: "#94a3b8" }}>Koper selecteert notaris via Move.nl</div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Section 3: Koper */}
-              {(() => {
-                const earlyStages = ["lead", "bezichtiging"];
-                const isEarlyStage = earlyStages.includes(currentStage?.toLowerCase());
-                if (isEarlyStage && !deal.buyer) {
-                  return (
-                    <div style={{ background: "#f8fafc", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px", display: "flex", alignItems: "center", gap: "12px" }}>
-                      <div style={{ fontSize: "24px" }}>👤</div>
-                      <div>
-                        <div style={{ fontSize: "13px", fontWeight: "600", color: "#64748b" }}>Nog geen koper in beeld</div>
-                        <div style={{ fontSize: "11px", color: "#94a3b8" }}>In de {STAGES.find((s) => s.id === currentStage)?.label} fase worden potentiële kopers gevonden via bezichtigingen</div>
-                      </div>
-                    </div>
-                  );
-                }
-                if (!deal.buyer) return null;
-                const d = daysSince(deal.created_at);
-                return (
-                  <div style={{ background: "#fff", border: "1px solid #e8ecf0", borderRadius: "12px", padding: "14px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <div style={{ fontSize: "9px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.8px" }}>Koper</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "linear-gradient(135deg, #0284c7, #38bdf8)", color: "#fff", fontWeight: "700", fontSize: "13px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        {deal.buyer.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{deal.buyer.name}</div>
-                        {deal.buyer.partner_name && <div style={{ fontSize: "11px", color: "#94a3b8" }}>& {deal.buyer.partner_name}</div>}
-                      </div>
-                    </div>
-                    {deal.buyer.phone && <a href={`tel:${deal.buyer.phone}`} style={{ fontSize: "12px", color: "#0284c7", textDecoration: "none" }}>{deal.buyer.phone}</a>}
-                    {deal.buyer.email && <a href={`mailto:${deal.buyer.email}`} style={{ fontSize: "12px", color: "#64748b", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{deal.buyer.email}</a>}
-                    {d < 3 ? <div style={{ fontSize: "11px", color: "#16a34a" }}>Recent contact ✓</div> : d < 7 ? <div style={{ fontSize: "11px", color: "#f97316" }}>{d} dagen geleden</div> : <div style={{ fontSize: "11px", color: "#ef4444" }}>{d} dagen geleden ⚠️</div>}
-                    <div style={{ fontSize: "11px", color: "#16a34a" }}>Voortgang: Compleet ✓</div>
-                    <button onClick={() => setActiveNav("whatsapp")} style={{ padding: "8px", background: "#dcfce7", color: "#16a34a", border: "1px solid #bbf7d0", borderRadius: "8px", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
-                      WhatsApp
-                    </button>
-                  </div>
-                );
-              })()}
-
-            </div>
-          )}
+          {activeNav === "overzicht" && <OverviewSection deal={deal} dealId={dealId} currentStage={currentStage} days={days} setActiveNav={setActiveNav} />}
 
           {activeNav === "bezichtigingen" && <BezichtigingenSection dealId={dealId} currentStage={currentStage} onAdvanceStage={advanceStage} />}
           {activeNav === "gastenlijst" && <GastenlijstSection deal={deal} dealId={dealId} />}
