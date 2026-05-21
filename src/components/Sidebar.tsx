@@ -76,6 +76,7 @@ export default function Sidebar({ userEmail, agentName }: { userEmail: string; a
   const [pendingCount, setPendingCount] = useState(0);
   const [role, setRole] = useState<string>("Makelaar");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [logoutHovered, setLogoutHovered] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -113,22 +114,20 @@ export default function Sidebar({ userEmail, agentName }: { userEmail: string; a
   const displayName = agentName || userEmail || "—";
   const initials = displayName.charAt(0).toUpperCase();
 
-  const allItems = NAV_ITEMS;
-
   return (
-    <aside style={{ width: "220px", minWidth: "220px", background: "#ffffff", borderRight: "1px solid #e8ecf0", display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0 }}>
+    <aside style={{ width: "220px", minWidth: "220px", background: "#0f172a", borderRight: "1px solid rgba(255,255,255,0.06)", display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0 }}>
 
       {/* Logo */}
-      <div style={{ height: 56, borderBottom: "1px solid #e8ecf0", display: "flex", alignItems: "center", padding: "0 16px", flexShrink: 0 }}>
+      <div style={{ height: 56, borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", padding: "0 16px", flexShrink: 0 }}>
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
           <Image src="/logo.png" alt="Transactly" width={28} height={28} style={{ objectFit: "contain" }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.3px" }}>Transactly</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "#ffffff", letterSpacing: "-0.3px" }}>Transactly</span>
         </Link>
       </div>
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: "12px 8px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
-        {allItems.map((item) => {
+        {NAV_ITEMS.map((item) => {
           const active = isActive(pathname, item);
           const hovered = hoveredId === item.id;
           const showBadge = "badge" in item && item.badge && pendingCount > 0;
@@ -143,15 +142,16 @@ export default function Sidebar({ userEmail, agentName }: { userEmail: string; a
                 display: "flex",
                 alignItems: "center",
                 gap: 10,
-                padding: "9px 12px",
+                padding: "8px 10px",
                 borderRadius: 8,
                 fontSize: 13,
                 fontWeight: active ? 600 : 500,
-                color: active ? "#0284c7" : hovered ? "#0f172a" : "#64748b",
-                background: active ? "#f0f9ff" : hovered ? "#f8fafc" : "transparent",
+                color: active ? "#ffffff" : hovered ? "#e2e8f0" : "#94a3b8",
+                background: active ? "rgba(255,255,255,0.08)" : hovered ? "rgba(255,255,255,0.05)" : "transparent",
                 textDecoration: "none",
                 position: "relative",
-                transition: "all 0.15s",
+                transition: "all 0.15s ease",
+                cursor: "pointer",
               }}
             >
               {active && (
@@ -161,18 +161,18 @@ export default function Sidebar({ userEmail, agentName }: { userEmail: string; a
                   top: "50%",
                   transform: "translateY(-50%)",
                   width: 3,
-                  height: 24,
+                  height: 20,
                   background: "#0284c7",
-                  borderRadius: "0 4px 4px 0",
+                  borderRadius: "0 3px 3px 0",
                 }} />
               )}
               <svg
-                width="20"
-                height="20"
+                width="18"
+                height="18"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke={active ? "#0284c7" : hovered ? "#0f172a" : "#94a3b8"}
-                strokeWidth="1.5"
+                stroke="currentColor"
+                strokeWidth="1.8"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 style={{ flexShrink: 0 }}
@@ -196,6 +196,7 @@ export default function Sidebar({ userEmail, agentName }: { userEmail: string; a
                   alignItems: "center",
                   justifyContent: "center",
                   padding: "0 4px",
+                  border: "2px solid #0f172a",
                 }}>
                   {pendingCount > 9 ? "9+" : pendingCount}
                 </span>
@@ -205,29 +206,34 @@ export default function Sidebar({ userEmail, agentName }: { userEmail: string; a
         })}
       </nav>
 
-      {/* Separator */}
-      <div style={{ borderTop: "1px solid #f1f5f9", margin: "0 8px" }} />
-
-      {/* User card */}
-      <div style={{ margin: "8px 8px 16px", padding: "12px", background: "#f8fafc", borderRadius: 10, border: "1px solid #e8ecf0" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <div style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(135deg, #7c3aed, #a855f7)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 600, fontSize: 12, flexShrink: 0 }}>
+      {/* Bottom user card */}
+      <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", padding: "12px 8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#0284c7", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
             {initials}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#e2e8f0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {displayName}
               </div>
-              <span style={{ fontSize: 9, fontWeight: 700, color: "#7c3aed", background: "#ede9fe", borderRadius: 20, padding: "1px 6px", flexShrink: 0, whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)", background: "rgba(255,255,255,0.1)", borderRadius: 20, padding: "1px 8px", flexShrink: 0, whiteSpace: "nowrap" }}>
                 {role}
               </span>
             </div>
-            <div style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {agentName ? userEmail : ""}
-            </div>
+            {agentName && (
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {userEmail}
+              </div>
+            )}
           </div>
-          <button onClick={handleSignOut} title="Uitloggen" style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", display: "flex", padding: "2px" }}>
+          <button
+            onClick={handleSignOut}
+            title="Uitloggen"
+            onMouseEnter={() => setLogoutHovered(true)}
+            onMouseLeave={() => setLogoutHovered(false)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: logoutHovered ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.3)", display: "flex", padding: "2px", transition: "color 0.15s" }}
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16,17 21,12 16,7" /><line x1="21" y1="12" x2="9" y2="12" />
             </svg>
