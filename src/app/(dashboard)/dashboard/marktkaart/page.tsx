@@ -89,6 +89,7 @@ export default function MarktkaartPage() {
   const [activeLayers, setActiveLayers] = useState<string[]>(["objecten"]);
   const [selectedDeal, setSelectedDeal] = useState<DealPin | null>(null);
   const [selectedCity, setSelectedCity] = useState<SelectedCity | null>(null);
+  const [selectedType, setSelectedType] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -165,7 +166,7 @@ export default function MarktkaartPage() {
     }
   }
 
-  const cityAvg: Record<string, number> = {}; // avg €/m²
+  const cityAvg: Record<string, number> = {}; // avg €/m² across all types
   const cityCoords: Record<string, { lat: number; lng: number }> = {};
   for (const [city, data] of Object.entries(cityM2Map)) {
     cityCoords[city] = { lat: data.lat, lng: data.lng };
@@ -173,6 +174,40 @@ export default function MarktkaartPage() {
       cityAvg[city] = data.eurPerM2s.reduce((a, b) => a + b, 0) / data.eurPerM2s.length;
     }
   }
+
+  // Per-type, per-city ranking data
+  const typeCityMap: Record<string, Record<string, number[]>> = {};
+  for (const d of deals) {
+    if (!d.city || !d.property_type) continue;
+    const price = d.agreed_price ?? d.asking_price ?? 0;
+    if (price <= 0) continue;
+    const surface = d.surface ?? 100;
+    if (!typeCityMap[d.property_type]) typeCityMap[d.property_type] = {};
+    if (!typeCityMap[d.property_type][d.city]) typeCityMap[d.property_type][d.city] = [];
+    typeCityMap[d.property_type][d.city].push(Math.round(price / surface));
+  }
+
+  // When a type is selected, override city avg with type-specific avg for the map
+  const effectiveCityAvg: Record<string, number> =
+    selectedType && typeCityMap[selectedType]
+      ? Object.fromEntries(
+          Object.entries(typeCityMap[selectedType]).map(([city, vals]) => [
+            city,
+            vals.reduce((a, b) => a + b, 0) / vals.length,
+          ])
+        )
+      : cityAvg;
+
+  // Sorted ranking for the selected type panel
+  const typeRanking = selectedType
+    ? Object.entries(typeCityMap[selectedType] ?? {})
+        .map(([city, vals]) => ({
+          city,
+          avg: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
+          count: vals.length,
+        }))
+        .sort((a, b) => b.avg - a.avg)
+    : [];
 
   function handleSelectCity(city: string) {
     const data = cityM2Map[city];
@@ -188,11 +223,19 @@ export default function MarktkaartPage() {
       byType: groupByType(data.cityDeals),
     });
     setSelectedDeal(null);
+    setSelectedType(null);
   }
 
   function handleSelectDeal(deal: DealPin | null) {
     setSelectedDeal(deal);
     setSelectedCity(null);
+    setSelectedType(null);
+  }
+
+  function handleSelectType(type: string) {
+    setSelectedType(type);
+    setSelectedCity(null);
+    setSelectedDeal(null);
   }
 
   const totalValue = filtered.reduce((s, d) => s + (d.agreed_price ?? d.asking_price ?? 0), 0);
@@ -246,6 +289,13 @@ export default function MarktkaartPage() {
               <span>{layer.label}</span>
             </button>
           ))}
+          {/* Active type filter chip */}
+          {selectedType && (
+            <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "#0f172a15", border: "1px solid #0f172a30", color: "#0f172a" }}>
+              <span style={{ textTransform: "capitalize" }}>{selectedType}</span>
+              <button onClick={() => setSelectedType(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", fontSize: 14, lineHeight: 1, padding: 0, marginLeft: 2 }}>×</button>
+            </div>
+          )}
         </div>
 
         <div style={{ flexShrink: 0 }}>
@@ -288,7 +338,7 @@ export default function MarktkaartPage() {
             activeLayers={activeLayers}
             onSelectDeal={handleSelectDeal}
             onSelectCity={handleSelectCity}
-            cityAvg={cityAvg}
+            cityAvg={effectiveCityAvg}
             cityCoords={cityCoords}
           />
         )}
@@ -334,12 +384,14 @@ export default function MarktkaartPage() {
             )}
             {activeLayers.includes("prijzen") && (
               <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Prijszone (€/m²)</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                  Prijszone (€/m²){selectedType ? ` · ${selectedType}` : ""}
+                </div>
                 {[
-                  { label: "< €2.000/m²",          color: "#16a34a" },
-                  { label: "€2.000 – €2.500/m²",   color: "#eab308" },
-                  { label: "€2.500 – €3.000/m²",   color: "#f97316" },
-                  { label: "> €3.000/m²",           color: "#ef4444" },
+                  { label: "< €2.000/m²",        color: "#16a34a" },
+                  { label: "€2.000 – €2.500/m²", color: "#eab308" },
+                  { label: "€2.500 – €3.000/m²", color: "#f97316" },
+                  { label: "> €3.000/m²",         color: "#ef4444" },
                 ].map((item) => (
                   <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                     <span style={{ width: 10, height: 10, borderRadius: "50%", background: item.color, display: "inline-block", flexShrink: 0 }} />
@@ -355,8 +407,54 @@ export default function MarktkaartPage() {
           </div>
         )}
 
-        {/* City detail panel (takes priority) */}
-        {selectedCity && (
+        {/* Type ranking panel — highest priority */}
+        {selectedType && (
+          <div style={{
+            position: "absolute", bottom: 24, right: 24, zIndex: 1001,
+            width: 280, background: "#fff", borderRadius: 14,
+            border: "1px solid #e8ecf0",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden",
+          }}>
+            <div style={{ background: "#0f172a", padding: "12px 16px", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", textTransform: "capitalize" }}>{selectedType}</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 1 }}>Prijs per gemeente</div>
+              </div>
+              <button
+                onClick={() => setSelectedType(null)}
+                style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ maxHeight: 340, overflowY: "auto" }}>
+              {typeRanking.length === 0 ? (
+                <div style={{ padding: 16, fontSize: 12, color: "#94a3b8", textAlign: "center" }}>Geen data beschikbaar</div>
+              ) : (
+                typeRanking.map((item, i) => (
+                  <div
+                    key={item.city}
+                    onClick={() => handleSelectCity(item.city)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "10px 16px", borderBottom: "1px solid #f8fafc",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span style={{ fontSize: 11, color: "#94a3b8", width: 18, textAlign: "right", flexShrink: 0, fontWeight: 600 }}>{i + 1}</span>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: getPrijsColor(item.avg), display: "inline-block", flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 12, color: "#0f172a", textTransform: "capitalize" }}>{item.city}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a" }}>€{item.avg.toLocaleString("nl-NL")}/m²</span>
+                    <span style={{ fontSize: 10, color: "#94a3b8", flexShrink: 0 }}>({item.count})</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* City detail panel */}
+        {selectedCity && !selectedType && (
           <div style={{
             position: "absolute", bottom: 24, right: 24, zIndex: 1000,
             width: 280, background: "#fff", borderRadius: 14,
@@ -384,9 +482,9 @@ export default function MarktkaartPage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
                 {[
                   { label: "TRANSACTIES", value: String(selectedCity.count) },
-                  { label: "GEM. PRIJS", value: formatEuro(selectedCity.avgPrice) },
-                  { label: "LAAGSTE", value: formatEuro(selectedCity.minPrice) },
-                  { label: "HOOGSTE", value: formatEuro(selectedCity.maxPrice) },
+                  { label: "GEM. PRIJS",  value: formatEuro(selectedCity.avgPrice) },
+                  { label: "LAAGSTE",     value: formatEuro(selectedCity.minPrice) },
+                  { label: "HOOGSTE",     value: formatEuro(selectedCity.maxPrice) },
                 ].map((stat) => (
                   <div key={stat.label} style={{ background: "#f8fafc", borderRadius: 8, padding: 8 }}>
                     <div style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>{stat.label}</div>
@@ -394,16 +492,23 @@ export default function MarktkaartPage() {
                   </div>
                 ))}
               </div>
-              {/* Per type */}
+              {/* Clickable type rows */}
               {Object.keys(selectedCity.byType).length > 0 && (
                 <div>
                   <div style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Per woningtype</div>
                   {Object.entries(selectedCity.byType).map(([type, m2Vals]) => {
                     const avg = Math.round(m2Vals.reduce((a, b) => a + b, 0) / m2Vals.length);
                     return (
-                      <div key={type} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #f8fafc" }}>
+                      <div
+                        key={type}
+                        onClick={() => handleSelectType(type)}
+                        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid #f8fafc", cursor: "pointer" }}
+                      >
                         <span style={{ fontSize: 12, color: "#64748b", textTransform: "capitalize" }}>{type}</span>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: "#0f172a" }}>€{avg.toLocaleString("nl-NL")}/m²</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "#0f172a" }}>€{avg.toLocaleString("nl-NL")}/m²</span>
+                          <span style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1 }}>›</span>
+                        </div>
                       </div>
                     );
                   })}
@@ -414,7 +519,7 @@ export default function MarktkaartPage() {
         )}
 
         {/* Selected deal panel */}
-        {selectedDeal && !selectedCity && (
+        {selectedDeal && !selectedCity && !selectedType && (
           <div style={{
             position: "absolute", bottom: 24, right: 24, zIndex: 1000,
             width: 280, background: "#fff", borderRadius: 12,
