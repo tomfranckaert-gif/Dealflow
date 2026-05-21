@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import type { DealStage } from "@/types/database";
@@ -20,16 +20,6 @@ export interface DealPin {
   property_type: string | null;
 }
 
-interface SelectedCity {
-  city: string;
-  eurPerM2: number;
-  count: number;
-  minPrice: number;
-  maxPrice: number;
-  avgPrice: number;
-  byType: Record<string, number[]>;
-}
-
 const STAGE_COLORS: Record<string, string> = {
   lead:         "#94a3b8",
   bezichtiging: "#eab308",
@@ -41,17 +31,10 @@ const STAGE_COLORS: Record<string, string> = {
   gesloten:     "#6b7280",
 };
 
-const LAYERS = [
-  { key: "objecten",       label: "Objecten",       icon: "🏠", color: "#0284c7" },
-  { key: "kopers",         label: "Kopers",         icon: "👤", color: "#ef4444" },
-  { key: "bezichtigingen", label: "Bezichtigingen", icon: "👁", color: "#f97316" },
-  { key: "prijzen",        label: "Prijzen",        icon: "💰", color: "#16a34a" },
-];
-
 const MapView = dynamic(() => import("./MapView"), {
   ssr: false,
   loading: () => (
-    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f5f9" }}>
+    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f5f9" }}>
       <span style={{ fontSize: 13, color: "#94a3b8" }}>Kaart laden…</span>
     </div>
   ),
@@ -68,28 +51,15 @@ function getPrijsColor(eurPerM2: number): string {
   return "#ef4444";
 }
 
-function groupByType(cityDeals: DealPin[]): Record<string, number[]> {
-  const result: Record<string, number[]> = {};
-  for (const d of cityDeals) {
-    const type = d.property_type ?? "overig";
-    const price = d.agreed_price ?? d.asking_price ?? 0;
-    const surface = d.surface ?? 100;
-    if (price > 0) {
-      if (!result[type]) result[type] = [];
-      result[type].push(Math.round(price / surface));
-    }
-  }
-  return result;
-}
-
 export default function MarktkaartPage() {
   const [deals, setDeals] = useState<DealPin[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeStage, setActiveStage] = useState<string | null>(null);
-  const [activeLayers, setActiveLayers] = useState<string[]>(["objecten"]);
+  const [selectedType, setSelectedType] = useState("alle");
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [hoveredCity, setHoveredCity] = useState<string | null>(null);
   const [selectedDeal, setSelectedDeal] = useState<DealPin | null>(null);
-  const [selectedCity, setSelectedCity] = useState<SelectedCity | null>(null);
-  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -123,7 +93,7 @@ export default function MarktkaartPage() {
         if (v.deal_id) viewingCounts[v.deal_id] = (viewingCounts[v.deal_id] ?? 0) + 1;
       }
 
-      const mapped: DealPin[] = rawDeals.map((d) => ({
+      setDeals(rawDeals.map((d) => ({
         id: d.id,
         address: d.address,
         city: d.city,
@@ -136,452 +106,324 @@ export default function MarktkaartPage() {
         viewing_count: viewingCounts[d.id] ?? 0,
         surface: d.surface,
         property_type: d.property_type,
-      }));
-
-      setDeals(mapped);
+      })));
       setLoading(false);
     }
     load();
   }, []);
 
-  const filtered = activeStage ? deals.filter((d) => d.stage === activeStage) : deals;
+  const filteredDeals = useMemo(() => {
+    let d = deals.filter((deal) => deal.lat !== null && deal.lng !== null);
+    if (selectedType !== "alle") d = d.filter((deal) => deal.property_type === selectedType);
+    if (activeStage !== null) d = d.filter((deal) => deal.stage === activeStage);
+    return d;
+  }, [deals, selectedType, activeStage]);
 
-  // Build city €/m² data
-  const cityM2Map: Record<string, {
-    eurPerM2s: number[];
-    lat: number;
-    lng: number;
-    cityDeals: DealPin[];
-    prices: number[];
-  }> = {};
-  for (const d of deals) {
-    if (!d.city) continue;
-    if (!cityM2Map[d.city]) cityM2Map[d.city] = { eurPerM2s: [], lat: d.lat, lng: d.lng, cityDeals: [], prices: [] };
-    cityM2Map[d.city].cityDeals.push(d);
-    const price = d.agreed_price ?? d.asking_price ?? 0;
-    if (price > 0) {
-      const surface = d.surface ?? 100;
-      cityM2Map[d.city].eurPerM2s.push(price / surface);
-      cityM2Map[d.city].prices.push(price);
+  const cityData = useMemo(() => {
+    const grouped: Record<string, { price: number; eurPerM2: number; deal: DealPin }[]> = {};
+    for (const deal of filteredDeals) {
+      const city = deal.city ?? "Onbekend";
+      if (!grouped[city]) grouped[city] = [];
+      const price = deal.agreed_price ?? deal.asking_price ?? 0;
+      if (price > 0) {
+        grouped[city].push({ price, eurPerM2: Math.round(price / (deal.surface ?? 100)), deal });
+      }
     }
-  }
+    return Object.entries(grouped)
+      .map(([city, items]) => ({
+        city,
+        avgPrice: Math.round(items.reduce((s, i) => s + i.price, 0) / items.length),
+        avgM2:    Math.round(items.reduce((s, i) => s + i.eurPerM2, 0) / items.length),
+        count:    items.length,
+        lat:      items[0].deal.lat,
+        lng:      items[0].deal.lng,
+      }))
+      .filter((c) => c.count > 0)
+      .sort((a, b) => b.avgPrice - a.avgPrice);
+  }, [filteredDeals]);
 
-  const cityAvg: Record<string, number> = {}; // avg €/m² across all types
-  const cityCoords: Record<string, { lat: number; lng: number }> = {};
-  for (const [city, data] of Object.entries(cityM2Map)) {
-    cityCoords[city] = { lat: data.lat, lng: data.lng };
-    if (data.eurPerM2s.length) {
-      cityAvg[city] = data.eurPerM2s.reduce((a, b) => a + b, 0) / data.eurPerM2s.length;
-    }
-  }
+  const maxAvgPrice = Math.max(...cityData.map((c) => c.avgPrice), 1);
+  const zeelandGem = cityData.length > 0
+    ? Math.round(cityData.reduce((s, c) => s + c.avgPrice, 0) / cityData.length)
+    : 0;
 
-  // Per-type, per-city ranking data
-  const typeCityMap: Record<string, Record<string, number[]>> = {};
-  for (const d of deals) {
-    if (!d.city || !d.property_type) continue;
-    const price = d.agreed_price ?? d.asking_price ?? 0;
-    if (price <= 0) continue;
-    const surface = d.surface ?? 100;
-    if (!typeCityMap[d.property_type]) typeCityMap[d.property_type] = {};
-    if (!typeCityMap[d.property_type][d.city]) typeCityMap[d.property_type][d.city] = [];
-    typeCityMap[d.property_type][d.city].push(Math.round(price / surface));
-  }
+  // Map data derived from cityData
+  const cityAvgM2 = Object.fromEntries(cityData.map((c) => [c.city, c.avgM2]));
+  const cityCoords = Object.fromEntries(cityData.map((c) => [c.city, { lat: c.lat, lng: c.lng }]));
 
-  // When a type is selected, override city avg with type-specific avg for the map
-  const effectiveCityAvg: Record<string, number> =
-    selectedType && typeCityMap[selectedType]
-      ? Object.fromEntries(
-          Object.entries(typeCityMap[selectedType]).map(([city, vals]) => [
-            city,
-            vals.reduce((a, b) => a + b, 0) / vals.length,
-          ])
-        )
-      : cityAvg;
-
-  // Sorted ranking for the selected type panel
-  const typeRanking = selectedType
-    ? Object.entries(typeCityMap[selectedType] ?? {})
-        .map(([city, vals]) => ({
-          city,
-          avg: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
-          count: vals.length,
-        }))
-        .sort((a, b) => b.avg - a.avg)
-    : [];
-
-  function handleSelectCity(city: string) {
-    const data = cityM2Map[city];
-    if (!data) return;
-    const prices = data.prices;
-    setSelectedCity({
-      city,
-      eurPerM2: Math.round(cityAvg[city] ?? 0),
-      count: data.cityDeals.length,
-      minPrice: prices.length ? Math.min(...prices) : 0,
-      maxPrice: prices.length ? Math.max(...prices) : 0,
-      avgPrice: prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0,
-      byType: groupByType(data.cityDeals),
-    });
-    setSelectedDeal(null);
-    setSelectedType(null);
-  }
-
-  function handleSelectDeal(deal: DealPin | null) {
-    setSelectedDeal(deal);
-    setSelectedCity(null);
-    setSelectedType(null);
-  }
-
-  function handleSelectType(type: string) {
-    setSelectedType(type);
-    setSelectedCity(null);
-    setSelectedDeal(null);
-  }
-
-  const totalValue = filtered.reduce((s, d) => s + (d.agreed_price ?? d.asking_price ?? 0), 0);
-
+  // Stage counts from raw deals for filter pills
   const stageCounts = deals.reduce<Record<string, number>>((acc, d) => {
     acc[d.stage] = (acc[d.stage] ?? 0) + 1;
     return acc;
   }, {});
 
-  function toggleLayer(key: string) {
-    setActiveLayers((prev) =>
-      prev.includes(key) ? prev.filter((l) => l !== key) : [...prev, key]
-    );
-  }
-
   // Deal panel €/m² comparison
   const dealPrice = selectedDeal ? (selectedDeal.agreed_price ?? selectedDeal.asking_price ?? 0) : 0;
   const dealEurM2 = dealPrice > 0 ? Math.round(dealPrice / (selectedDeal?.surface ?? 100)) : 0;
-  const cityAvgM2 = selectedDeal?.city ? Math.round(cityAvg[selectedDeal.city] ?? 0) : 0;
-  const m2Diff = dealEurM2 - cityAvgM2;
-  const m2DiffPct = cityAvgM2 > 0 ? Math.round((m2Diff / cityAvgM2) * 100) : 0;
+  const dealCityAvgM2 = selectedDeal?.city ? (cityAvgM2[selectedDeal.city] ?? 0) : 0;
+  const m2Diff = dealEurM2 - dealCityAvgM2;
+  const m2DiffPct = dealCityAvgM2 > 0 ? Math.round((m2Diff / dealCityAvgM2) * 100) : 0;
+
+  function handleSelectDeal(deal: DealPin) {
+    setSelectedDeal(deal);
+    if (deal.city) setSelectedCity(deal.city);
+  }
+
+  function handleCopy() {
+    const typeLabel = selectedType === "alle" ? "alle woningtypes" : selectedType;
+    const lines = cityData.map((c) =>
+      `${c.city}: gem. ${formatEuro(c.avgPrice)} (€${c.avgM2.toLocaleString("nl-NL")}/m²)`
+    ).join("\n");
+    const text =
+      `Prijsoverzicht ${typeLabel} — Zeeland\n` +
+      `${"─".repeat(40)}\n` +
+      `${lines}\n` +
+      `${"─".repeat(40)}\n` +
+      `Zeeland gem.: ${formatEuro(zeelandGem)}\n\n` +
+      `Bron: Transactly — eigen transacties\n` +
+      `${new Date().toLocaleDateString("nl-NL")}`;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "DM Sans, Helvetica Neue, sans-serif" }}>
 
-      {/* Header */}
-      <div style={{ height: 56, background: "#fff", borderBottom: "1px solid #e8ecf0", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", flexShrink: 0, gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-          <span style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.4px" }}>Marktkaart</span>
+      {/* TOP BAR */}
+      <div style={{ height: 52, background: "#fff", borderBottom: "1px solid #e8ecf0", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.3px" }}>Marktkaart</span>
           {!loading && (
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>{filtered.length} objecten{activeStage ? ` · ${activeStage}` : ""}</span>
-          )}
-        </div>
-
-        {/* Layer toggles */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, justifyContent: "center" }}>
-          {LAYERS.map((layer) => (
-            <button
-              key={layer.key}
-              onClick={() => toggleLayer(layer.key)}
-              style={{
-                display: "flex", alignItems: "center", gap: 5,
-                padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-                cursor: "pointer", border: "1px solid", transition: "all 0.15s",
-                borderColor: activeLayers.includes(layer.key) ? layer.color : "#e8ecf0",
-                background: activeLayers.includes(layer.key) ? layer.color + "15" : "#fff",
-                color: activeLayers.includes(layer.key) ? layer.color : "#64748b",
-              }}
-            >
-              <span>{layer.icon}</span>
-              <span>{layer.label}</span>
-            </button>
-          ))}
-          {/* Active type filter chip */}
-          {selectedType && (
-            <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600, background: "#0f172a15", border: "1px solid #0f172a30", color: "#0f172a" }}>
-              <span style={{ textTransform: "capitalize" }}>{selectedType}</span>
-              <button onClick={() => setSelectedType(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", fontSize: 14, lineHeight: 1, padding: 0, marginLeft: 2 }}>×</button>
-            </div>
-          )}
-        </div>
-
-        <div style={{ flexShrink: 0 }}>
-          {totalValue > 0 && activeLayers.includes("objecten") && (
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{formatEuro(totalValue)}</span>
+            <span style={{ fontSize: 11, color: "#94a3b8" }}>
+              {filteredDeals.length} objecten · {cityData.length} gemeenten
+            </span>
           )}
         </div>
       </div>
 
-      {/* Stage filter pills */}
-      <div style={{ background: "#fff", borderBottom: "1px solid #e8ecf0", padding: "8px 24px", display: "flex", gap: 6, flexWrap: "wrap", flexShrink: 0 }}>
+      {/* FILTER BAR */}
+      <div style={{ background: "#fff", borderBottom: "1px solid #e8ecf0", padding: "8px 16px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        {/* Type dropdown */}
+        <select
+          value={selectedType}
+          onChange={(e) => { setSelectedType(e.target.value); setSelectedCity(null); setSelectedDeal(null); }}
+          style={{
+            border: "1px solid #e8ecf0", borderRadius: 20, padding: "5px 14px",
+            fontSize: 12, fontWeight: 500, cursor: "pointer", outline: "none",
+            color: selectedType !== "alle" ? "#0284c7" : "#64748b",
+            background: selectedType !== "alle" ? "#f0f9ff" : "#fff",
+            flexShrink: 0,
+          }}
+        >
+          <option value="alle">🏠 Alle types</option>
+          <option value="tussenwoning">Tussenwoning</option>
+          <option value="hoekwoning">Hoekwoning</option>
+          <option value="twee-onder-een-kapwoning">2-onder-1-kap</option>
+          <option value="eengezinswoning">Eengezinswoning</option>
+          <option value="appartement">Appartement</option>
+          <option value="bovenwoning">Bovenwoning</option>
+          <option value="vrijstaande woning">Vrijstaand</option>
+          <option value="bungalow">Bungalow</option>
+        </select>
+
+        {/* Stage pills */}
         <button
           onClick={() => setActiveStage(null)}
-          style={{ padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: "pointer", border: "1px solid", borderColor: activeStage === null ? "#0284c7" : "#e8ecf0", background: activeStage === null ? "#f0f9ff" : "#fff", color: activeStage === null ? "#0284c7" : "#64748b" }}
+          style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: "pointer", border: "1px solid", flexShrink: 0, borderColor: activeStage === null ? "#0284c7" : "#e8ecf0", background: activeStage === null ? "#f0f9ff" : "#fff", color: activeStage === null ? "#0284c7" : "#64748b" }}
         >
-          Alle ({deals.length})
+          Alle
         </button>
         {Object.entries(stageCounts).map(([stage, count]) => (
           <button
             key={stage}
             onClick={() => setActiveStage(activeStage === stage ? null : stage)}
-            style={{ padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: "pointer", border: "1px solid", borderColor: activeStage === stage ? STAGE_COLORS[stage] : "#e8ecf0", background: activeStage === stage ? (STAGE_COLORS[stage] ?? "#94a3b8") + "18" : "#fff", color: activeStage === stage ? STAGE_COLORS[stage] : "#64748b" }}
+            style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: "pointer", border: "1px solid", flexShrink: 0, borderColor: activeStage === stage ? STAGE_COLORS[stage] : "#e8ecf0", background: activeStage === stage ? (STAGE_COLORS[stage] ?? "#94a3b8") + "18" : "#fff", color: activeStage === stage ? STAGE_COLORS[stage] : "#64748b" }}
           >
-            <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: STAGE_COLORS[stage] ?? "#94a3b8", marginRight: 5, verticalAlign: "middle" }} />
+            <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: STAGE_COLORS[stage] ?? "#94a3b8", marginRight: 4, verticalAlign: "middle" }} />
             {stage.charAt(0).toUpperCase() + stage.slice(1)} ({count})
           </button>
         ))}
+
+        <div style={{ flex: 1 }} />
+
+        {/* Count pill */}
+        <span style={{ background: "#f1f5f9", color: "#64748b", fontSize: 11, borderRadius: 20, padding: "4px 12px", flexShrink: 0 }}>
+          {filteredDeals.length} objecten
+        </span>
       </div>
 
-      {/* Map area */}
-      <div style={{ flex: 1, position: "relative" }}>
-        {loading ? (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f5f9" }}>
-            <span style={{ fontSize: 13, color: "#94a3b8" }}>Deals laden…</span>
-          </div>
-        ) : (
-          <MapView
-            deals={filtered}
-            stageColors={STAGE_COLORS}
-            activeLayers={activeLayers}
-            onSelectDeal={handleSelectDeal}
-            onSelectCity={handleSelectCity}
-            cityAvg={effectiveCityAvg}
-            cityCoords={cityCoords}
-          />
-        )}
+      {/* MAIN SPLIT */}
+      <div style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}>
 
-        {/* Legend */}
-        {activeLayers.length > 0 && !loading && (
-          <div style={{
-            position: "absolute", bottom: 24, left: 56, zIndex: 1000,
-            background: "rgba(255,255,255,0.96)", borderRadius: 10,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.1)", padding: "12px 14px", minWidth: 152,
-          }}>
-            {activeLayers.includes("objecten") && (
-              <div style={{ marginBottom: activeLayers.length > 1 ? 10 : 0 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>Objecten</div>
-                {Object.entries(STAGE_COLORS).map(([stage, color]) => {
-                  if (!stageCounts[stage]) return null;
-                  return (
-                    <div key={stage} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
-                      <span style={{ fontSize: 11, color: "#0f172a", textTransform: "capitalize" }}>{stage}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {activeLayers.includes("kopers") && (
-              <div style={{ marginBottom: (activeLayers.includes("bezichtigingen") || activeLayers.includes("prijzen")) ? 10 : 0 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>Kopers</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", display: "inline-block" }} />
-                  <span style={{ fontSize: 11, color: "#0f172a" }}>Koper aanwezig</span>
-                </div>
-              </div>
-            )}
-            {activeLayers.includes("bezichtigingen") && (
-              <div style={{ marginBottom: activeLayers.includes("prijzen") ? 10 : 0 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>Bezichtigingen</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f97316", display: "inline-block", opacity: 0.6 }} />
-                  <span style={{ fontSize: 11, color: "#0f172a" }}>Bezichtigingen</span>
-                </div>
-              </div>
-            )}
-            {activeLayers.includes("prijzen") && (
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-                  Prijszone (€/m²){selectedType ? ` · ${selectedType}` : ""}
-                </div>
-                {[
-                  { label: "< €2.000/m²",        color: "#16a34a" },
-                  { label: "€2.000 – €2.500/m²", color: "#eab308" },
-                  { label: "€2.500 – €3.000/m²", color: "#f97316" },
-                  { label: "> €3.000/m²",         color: "#ef4444" },
-                ].map((item) => (
-                  <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: item.color, display: "inline-block", flexShrink: 0 }} />
-                    <span style={{ fontSize: 11, color: "#64748b" }}>{item.label}</span>
-                  </div>
-                ))}
-                <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 8, marginTop: 8, fontSize: 9, color: "#94a3b8", fontStyle: "italic", lineHeight: 1.4 }}>
-                  Gebaseerd op eigen transacties.<br />
-                  Marktbrede data via Brainbay API.
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Type ranking panel — highest priority */}
-        {selectedType && (
-          <div style={{
-            position: "absolute", bottom: 24, right: 24, zIndex: 1001,
-            width: 280, background: "#fff", borderRadius: 14,
-            border: "1px solid #e8ecf0",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden",
-          }}>
-            <div style={{ background: "#0f172a", padding: "12px 16px", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", textTransform: "capitalize" }}>{selectedType}</div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 1 }}>Prijs per gemeente</div>
-              </div>
-              <button
-                onClick={() => setSelectedType(null)}
-                style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}
-              >
-                ×
-              </button>
+        {/* LEFT — MAP 65% */}
+        <div style={{ flex: "0 0 65%", position: "relative", overflow: "hidden" }}>
+          {loading ? (
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f5f9" }}>
+              <span style={{ fontSize: 13, color: "#94a3b8" }}>Laden…</span>
             </div>
-            <div style={{ maxHeight: 340, overflowY: "auto" }}>
-              {typeRanking.length === 0 ? (
-                <div style={{ padding: 16, fontSize: 12, color: "#94a3b8", textAlign: "center" }}>Geen data beschikbaar</div>
-              ) : (
-                typeRanking.map((item, i) => (
+          ) : (
+            <MapView
+              deals={filteredDeals}
+              stageColors={STAGE_COLORS}
+              onSelectDeal={handleSelectDeal}
+              onSelectCity={(city) => { setSelectedCity(city); setSelectedDeal(null); }}
+              onHoverCity={setHoveredCity}
+              selectedCity={selectedCity}
+              hoveredCity={hoveredCity}
+              cityAvg={cityAvgM2}
+              cityCoords={cityCoords}
+            />
+          )}
+
+          {/* Deal detail overlay — kept in left map */}
+          {selectedDeal && (
+            <div style={{
+              position: "absolute", bottom: 20, right: 20, zIndex: 1000,
+              width: 264, background: "#fff", borderRadius: 12,
+              boxShadow: "0 8px 28px rgba(0,0,0,0.14)", overflow: "hidden",
+            }}>
+              <div style={{ background: "#0f172a", padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 8 }}>
+                  {selectedDeal.address ?? "Object"}
+                </span>
+                <button onClick={() => setSelectedDeal(null)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 17, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+              </div>
+              <div style={{ padding: "12px 14px" }}>
+                {selectedDeal.city && <div style={{ fontSize: 11, color: "#64748b", marginBottom: 6 }}>{selectedDeal.city}</div>}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: STAGE_COLORS[selectedDeal.stage] ?? "#94a3b8", display: "inline-block" }} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#0f172a", textTransform: "capitalize" }}>{selectedDeal.stage}</span>
+                </div>
+                {dealPrice > 0 && (
+                  <>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: "#0284c7", marginBottom: 3 }}>{formatEuro(dealPrice)}</div>
+                    {dealEurM2 > 0 && (
+                      <div style={{ fontSize: 10, color: "#64748b", marginBottom: 10 }}>
+                        €{dealEurM2.toLocaleString("nl-NL")}/m²
+                        {dealCityAvgM2 > 0 && (
+                          <span style={{ marginLeft: 3, color: m2Diff > 0 ? "#ef4444" : m2Diff < 0 ? "#16a34a" : "#94a3b8", fontWeight: 600 }}>
+                            {m2Diff > 0 ? ` · +${m2DiffPct}% boven gem.` : m2Diff < 0 ? ` · ${Math.abs(m2DiffPct)}% onder gem.` : " · Gem."}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+                {(selectedDeal.has_buyer || selectedDeal.viewing_count > 0) && (
+                  <div style={{ display: "flex", gap: 8, fontSize: 10, color: "#64748b", marginBottom: 10 }}>
+                    {selectedDeal.has_buyer && <span>👤 Koper</span>}
+                    {selectedDeal.viewing_count > 0 && <span>👁 {selectedDeal.viewing_count} bezichtiging{selectedDeal.viewing_count !== 1 ? "en" : ""}</span>}
+                  </div>
+                )}
+                <a href={`/dashboard/${selectedDeal.id}`} style={{ display: "block", textAlign: "center", background: "#0284c7", color: "#fff", borderRadius: 7, padding: "7px 0", fontSize: 11, fontWeight: 600, textDecoration: "none" }}>
+                  Open deal →
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT — DATA PANEL 35% */}
+        <div style={{ flex: "0 0 35%", borderLeft: "1px solid #e8ecf0", background: "#ffffff", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+          <div style={{ padding: 20, flex: 1 }}>
+
+            {/* Panel header */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.3px" }}>
+                {selectedType === "alle"
+                  ? "Prijsoverzicht Zeeland"
+                  : selectedType.charAt(0).toUpperCase() + selectedType.slice(1) + " — Zeeland"}
+              </div>
+              <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>
+                {filteredDeals.length} transacties · gem. {formatEuro(zeelandGem)}
+              </div>
+            </div>
+
+            <div style={{ borderTop: "1px solid #e8ecf0", marginBottom: 14 }} />
+
+            {/* Bar chart */}
+            {loading ? (
+              <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: "24px 0" }}>Laden…</div>
+            ) : cityData.length === 0 ? (
+              <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: "24px 0" }}>Geen data voor deze filters</div>
+            ) : (
+              cityData.map((c) => {
+                const isSelected = selectedCity === c.city;
+                const isHovered = hoveredCity === c.city;
+                const isHighlighted = isSelected || isHovered;
+                return (
                   <div
-                    key={item.city}
-                    onClick={() => handleSelectCity(item.city)}
+                    key={c.city}
+                    onMouseEnter={() => setHoveredCity(c.city)}
+                    onMouseLeave={() => setHoveredCity(null)}
+                    onClick={() => setSelectedCity(selectedCity === c.city ? null : c.city)}
                     style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      padding: "10px 16px", borderBottom: "1px solid #f8fafc",
-                      cursor: "pointer",
+                      marginBottom: 12, cursor: "pointer",
+                      opacity: selectedCity && !isHighlighted ? 0.4 : 1,
+                      transition: "opacity 0.2s ease",
                     }}
                   >
-                    <span style={{ fontSize: 11, color: "#94a3b8", width: 18, textAlign: "right", flexShrink: 0, fontWeight: 600 }}>{i + 1}</span>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: getPrijsColor(item.avg), display: "inline-block", flexShrink: 0 }} />
-                    <span style={{ flex: 1, fontSize: 12, color: "#0f172a", textTransform: "capitalize" }}>{item.city}</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a" }}>€{item.avg.toLocaleString("nl-NL")}/m²</span>
-                    <span style={{ fontSize: 10, color: "#94a3b8", flexShrink: 0 }}>({item.count})</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* City detail panel */}
-        {selectedCity && !selectedType && (
-          <div style={{
-            position: "absolute", bottom: 24, right: 24, zIndex: 1000,
-            width: 280, background: "#fff", borderRadius: 14,
-            border: "1px solid #e8ecf0",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden",
-          }}>
-            <div style={{ background: "#0f172a", padding: "12px 16px", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{selectedCity.city}</div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 1 }}>Prijsoverzicht</div>
-              </div>
-              <button
-                onClick={() => setSelectedCity(null)}
-                style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}
-              >
-                ×
-              </button>
-            </div>
-            <div style={{ padding: "14px 16px" }}>
-              {/* Gem €/m² */}
-              <div style={{ fontSize: 20, fontWeight: 800, color: getPrijsColor(selectedCity.eurPerM2), marginBottom: 10 }}>
-                €{selectedCity.eurPerM2.toLocaleString("nl-NL")}/m²
-              </div>
-              {/* Stats grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-                {[
-                  { label: "TRANSACTIES", value: String(selectedCity.count) },
-                  { label: "GEM. PRIJS",  value: formatEuro(selectedCity.avgPrice) },
-                  { label: "LAAGSTE",     value: formatEuro(selectedCity.minPrice) },
-                  { label: "HOOGSTE",     value: formatEuro(selectedCity.maxPrice) },
-                ].map((stat) => (
-                  <div key={stat.label} style={{ background: "#f8fafc", borderRadius: 8, padding: 8 }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>{stat.label}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{stat.value}</div>
-                  </div>
-                ))}
-              </div>
-              {/* Clickable type rows */}
-              {Object.keys(selectedCity.byType).length > 0 && (
-                <div>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Per woningtype</div>
-                  {Object.entries(selectedCity.byType).map(([type, m2Vals]) => {
-                    const avg = Math.round(m2Vals.reduce((a, b) => a + b, 0) / m2Vals.length);
-                    return (
-                      <div
-                        key={type}
-                        onClick={() => handleSelectType(type)}
-                        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid #f8fafc", cursor: "pointer" }}
-                      >
-                        <span style={{ fontSize: 12, color: "#64748b", textTransform: "capitalize" }}>{type}</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: "#0f172a" }}>€{avg.toLocaleString("nl-NL")}/m²</span>
-                          <span style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1 }}>›</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Selected deal panel */}
-        {selectedDeal && !selectedCity && !selectedType && (
-          <div style={{
-            position: "absolute", bottom: 24, right: 24, zIndex: 1000,
-            width: 280, background: "#fff", borderRadius: 12,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.14)", overflow: "hidden",
-          }}>
-            <div style={{ background: "#0f172a", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginRight: 8 }}>
-                {selectedDeal.address ?? "Object"}
-              </span>
-              <button
-                onClick={() => setSelectedDeal(null)}
-                style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0, padding: 0 }}
-              >
-                ×
-              </button>
-            </div>
-            <div style={{ padding: "14px 16px" }}>
-              {selectedDeal.city && (
-                <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>{selectedDeal.city}</div>
-              )}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: STAGE_COLORS[selectedDeal.stage] ?? "#94a3b8", display: "inline-block", flexShrink: 0 }} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#0f172a", textTransform: "capitalize" }}>{selectedDeal.stage}</span>
-              </div>
-              {dealPrice > 0 && (
-                <>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "#0284c7", marginBottom: 4 }}>
-                    {formatEuro(dealPrice)}
-                  </div>
-                  {dealEurM2 > 0 && (
-                    <div style={{ fontSize: 11, color: "#64748b", marginBottom: 10 }}>
-                      €{dealEurM2.toLocaleString("nl-NL")}/m²
-                      {cityAvgM2 > 0 && (
-                        <span style={{ marginLeft: 4, color: m2Diff > 0 ? "#ef4444" : m2Diff < 0 ? "#16a34a" : "#94a3b8", fontWeight: 600 }}>
-                          {m2Diff > 0
-                            ? ` · +${m2DiffPct}% boven gem. ${selectedDeal.city}`
-                            : m2Diff < 0
-                            ? ` · ${Math.abs(m2DiffPct)}% onder gem. ${selectedDeal.city}`
-                            : ` · Gem. prijs ${selectedDeal.city}`}
+                    {/* City name + price */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: isHighlighted ? 700 : 500, color: isHighlighted ? "#0f172a" : "#374151" }}>
+                        {c.city}
+                      </span>
+                      <div style={{ textAlign: "right" }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: getPrijsColor(c.avgM2) }}>
+                          {formatEuro(c.avgPrice)}
                         </span>
-                      )}
+                        <span style={{ fontSize: 10, color: "#94a3b8", marginLeft: 6 }}>
+                          €{c.avgM2.toLocaleString("nl-NL")}/m²
+                        </span>
+                      </div>
                     </div>
-                  )}
-                </>
-              )}
-              {(selectedDeal.has_buyer || selectedDeal.viewing_count > 0) && (
-                <div style={{ display: "flex", gap: 10, fontSize: 11, color: "#64748b", marginBottom: 14 }}>
-                  {selectedDeal.has_buyer && <span>👤 Koper aanwezig</span>}
-                  {selectedDeal.viewing_count > 0 && (
-                    <span>👁 {selectedDeal.viewing_count} bezichtiging{selectedDeal.viewing_count !== 1 ? "en" : ""}</span>
-                  )}
-                </div>
-              )}
-              <a
-                href={`/dashboard/${selectedDeal.id}`}
-                style={{ display: "block", textAlign: "center", background: "#0284c7", color: "#fff", borderRadius: 8, padding: "8px 0", fontSize: 12, fontWeight: 600, textDecoration: "none" }}
+                    {/* Bar */}
+                    <div style={{ height: 8, background: "#f1f5f9", borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{
+                        height: "100%",
+                        width: `${(c.avgPrice / maxAvgPrice) * 100}%`,
+                        background: getPrijsColor(c.avgM2),
+                        borderRadius: 4,
+                        transition: "width 0.4s ease",
+                        opacity: isHighlighted ? 1 : 0.7,
+                      }} />
+                    </div>
+                    {/* Count */}
+                    <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>
+                      {c.count} transactie{c.count !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+
+            {/* Zeeland gemiddelde */}
+            {zeelandGem > 0 && (
+              <div style={{ borderTop: "2px dashed #e8ecf0", paddingTop: 12, marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Zeeland gemiddeld</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{formatEuro(zeelandGem)}</span>
+              </div>
+            )}
+
+            {/* Copy button */}
+            {cityData.length > 0 && (
+              <button
+                onClick={handleCopy}
+                style={{
+                  width: "100%", marginTop: 20, padding: "10px 0",
+                  background: copied ? "#16a34a" : "#0284c7",
+                  color: "#fff", border: "none", borderRadius: 8,
+                  fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  transition: "background 0.2s",
+                }}
               >
-                Open deal →
-              </a>
-            </div>
+                {copied ? "✓ Gekopieerd naar klembord!" : "📋 Kopieer voor verkoopgesprek"}
+              </button>
+            )}
           </div>
-        )}
+        </div>
+
       </div>
     </div>
   );

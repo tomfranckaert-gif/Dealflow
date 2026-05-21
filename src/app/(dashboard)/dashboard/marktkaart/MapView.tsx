@@ -37,9 +37,11 @@ function FitBounds({ deals }: { deals: DealPin[] }) {
 interface MapViewProps {
   deals: DealPin[];
   stageColors: Record<string, string>;
-  activeLayers: string[];
-  onSelectDeal: (deal: DealPin | null) => void;
+  onSelectDeal: (deal: DealPin) => void;
   onSelectCity: (city: string) => void;
+  onHoverCity: (city: string | null) => void;
+  selectedCity: string | null;
+  hoveredCity: string | null;
   cityAvg: Record<string, number>;
   cityCoords: Record<string, { lat: number; lng: number }>;
 }
@@ -53,12 +55,13 @@ const PRICE_LABEL_CSS = `
     padding: 4px 8px !important;
     box-shadow: none !important;
   }
-  .price-label::before {
-    display: none !important;
-  }
+  .price-label::before { display: none !important; }
 `;
 
-export default function MapView({ deals, stageColors, activeLayers, onSelectDeal, onSelectCity, cityAvg, cityCoords }: MapViewProps) {
+export default function MapView({
+  deals, stageColors, onSelectDeal, onSelectCity, onHoverCity,
+  selectedCity, hoveredCity, cityAvg, cityCoords,
+}: MapViewProps) {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: PRICE_LABEL_CSS }} />
@@ -74,100 +77,75 @@ export default function MapView({ deals, stageColors, activeLayers, onSelectDeal
         />
         <FitBounds deals={deals} />
 
-        {/* Prijskaart laag — city circles with permanent labels */}
-        {activeLayers.includes("prijzen") &&
-          Object.entries(cityAvg).map(([city, avg]) => {
-            const coords = cityCoords[city];
-            if (!coords) return null;
-            const color = priceColor(avg);
-            return (
-              <Circle
-                key={`price-${city}`}
-                center={[coords.lat, coords.lng]}
-                radius={3000}
-                pathOptions={{ fillColor: color, fillOpacity: 0.25, color: color, weight: 1.5 }}
-                eventHandlers={{ click: () => onSelectCity(city) }}
-              >
-                <Tooltip permanent direction="center" className="price-label">
-                  <div style={{ fontSize: 11, fontWeight: 700, textAlign: "center", lineHeight: 1.3 }}>
-                    {city}<br />
-                    €{Math.round(avg).toLocaleString("nl-NL")}/m²
-                  </div>
-                </Tooltip>
-              </Circle>
-            );
-          })}
+        {/* City price circles — always shown when data exists */}
+        {Object.entries(cityAvg).map(([city, avg]) => {
+          const coords = cityCoords[city];
+          if (!coords) return null;
+          const color = priceColor(avg);
+          const isHighlighted = city === selectedCity || city === hoveredCity;
+          return (
+            <Circle
+              key={`price-${city}`}
+              center={[coords.lat, coords.lng]}
+              radius={3000}
+              pathOptions={{
+                fillColor: color,
+                fillOpacity: isHighlighted ? 0.5 : 0.2,
+                color: color,
+                weight: isHighlighted ? 3 : 1,
+              }}
+              eventHandlers={{
+                click: () => onSelectCity(city),
+                mouseover: () => onHoverCity(city),
+                mouseout: () => onHoverCity(null),
+              }}
+            >
+              <Tooltip permanent direction="center" className="price-label">
+                <div style={{ fontSize: 11, fontWeight: 700, textAlign: "center", lineHeight: 1.3 }}>
+                  {city}<br />
+                  €{Math.round(avg).toLocaleString("nl-NL")}/m²
+                </div>
+              </Tooltip>
+            </Circle>
+          );
+        })}
 
-        {/* Bezichtigingen laag */}
-        {activeLayers.includes("bezichtigingen") &&
-          deals
-            .filter((d) => d.viewing_count > 0)
-            .map((deal) => (
-              <CircleMarker
-                key={`view-${deal.id}`}
-                center={[deal.lat, deal.lng]}
-                radius={6}
-                pathOptions={{ fillColor: "#f97316", fillOpacity: 0.5, color: "#f97316", weight: 1 }}
-                eventHandlers={{ click: () => onSelectDeal(deal) }}
-              >
-                <Popup>
-                  <div style={{ fontFamily: "DM Sans, sans-serif" }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "#0f172a" }}>{deal.address ?? "—"}</div>
-                    <div style={{ fontSize: 11, color: "#f97316", fontWeight: 600, marginTop: 3 }}>
-                      {deal.viewing_count} bezichtiging{deal.viewing_count !== 1 ? "en" : ""}
-                    </div>
+        {/* Object markers */}
+        {deals.map((deal) => {
+          const color = stageColors[deal.stage] ?? "#94a3b8";
+          const price = deal.agreed_price ?? deal.asking_price;
+          const isInSelectedCity = selectedCity ? deal.city === selectedCity : true;
+          return (
+            <CircleMarker
+              key={deal.id}
+              center={[deal.lat, deal.lng]}
+              radius={9}
+              pathOptions={{
+                fillColor: color,
+                fillOpacity: isInSelectedCity ? 0.9 : 0.35,
+                color: "#fff",
+                weight: 2,
+              }}
+              eventHandlers={{ click: () => onSelectDeal(deal) }}
+            >
+              <Popup>
+                <div style={{ minWidth: 152, fontFamily: "DM Sans, sans-serif" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>
+                    {deal.address ?? "—"}
                   </div>
-                </Popup>
-              </CircleMarker>
-            ))}
-
-        {/* Kopers laag */}
-        {activeLayers.includes("kopers") &&
-          deals
-            .filter((d) => d.has_buyer)
-            .map((deal) => (
-              <CircleMarker
-                key={`buyer-${deal.id}`}
-                center={[deal.lat, deal.lng]}
-                radius={8}
-                pathOptions={{ fillColor: "#ef4444", fillOpacity: 0.7, color: "#fff", weight: 2 }}
-                eventHandlers={{ click: () => onSelectDeal(deal) }}
-              />
-            ))}
-
-        {/* Objecten laag */}
-        {activeLayers.includes("objecten") &&
-          deals.map((deal) => {
-            const color = stageColors[deal.stage] ?? "#94a3b8";
-            const price = deal.agreed_price ?? deal.asking_price;
-            return (
-              <CircleMarker
-                key={deal.id}
-                center={[deal.lat, deal.lng]}
-                radius={9}
-                pathOptions={{ fillColor: color, fillOpacity: 0.85, color: "#fff", weight: 2 }}
-                eventHandlers={{ click: () => onSelectDeal(deal) }}
-              >
-                <Popup>
-                  <div style={{ minWidth: 160, fontFamily: "DM Sans, sans-serif" }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>
-                      {deal.address ?? "—"}
-                    </div>
-                    {deal.city && (
-                      <div style={{ fontSize: 11, color: "#64748b", marginBottom: 6 }}>{deal.city}</div>
-                    )}
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
-                      <span style={{ fontSize: 11, fontWeight: 600, color: "#0f172a", textTransform: "capitalize" }}>{deal.stage}</span>
-                    </div>
-                    {price != null && (
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#0284c7" }}>{formatEuro(price)}</div>
-                    )}
+                  {deal.city && <div style={{ fontSize: 11, color: "#64748b", marginBottom: 6 }}>{deal.city}</div>}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, display: "inline-block" }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "#0f172a", textTransform: "capitalize" }}>{deal.stage}</span>
                   </div>
-                </Popup>
-              </CircleMarker>
-            );
-          })}
+                  {price != null && (
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0284c7" }}>{formatEuro(price)}</div>
+                  )}
+                </div>
+              </Popup>
+            </CircleMarker>
+          );
+        })}
       </MapContainer>
     </>
   );
