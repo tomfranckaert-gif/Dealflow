@@ -16,6 +16,18 @@ export interface DealPin {
   lng: number;
   has_buyer: boolean;
   viewing_count: number;
+  surface: number | null;
+  property_type: string | null;
+}
+
+interface SelectedCity {
+  city: string;
+  eurPerM2: number;
+  count: number;
+  minPrice: number;
+  maxPrice: number;
+  avgPrice: number;
+  byType: Record<string, number[]>;
 }
 
 const STAGE_COLORS: Record<string, string> = {
@@ -49,12 +61,34 @@ function formatEuro(v: number) {
   return "€ " + Math.round(v).toLocaleString("nl-NL");
 }
 
+function getPrijsColor(eurPerM2: number): string {
+  if (eurPerM2 < 2000) return "#16a34a";
+  if (eurPerM2 < 2500) return "#eab308";
+  if (eurPerM2 < 3000) return "#f97316";
+  return "#ef4444";
+}
+
+function groupByType(cityDeals: DealPin[]): Record<string, number[]> {
+  const result: Record<string, number[]> = {};
+  for (const d of cityDeals) {
+    const type = d.property_type ?? "overig";
+    const price = d.agreed_price ?? d.asking_price ?? 0;
+    const surface = d.surface ?? 100;
+    if (price > 0) {
+      if (!result[type]) result[type] = [];
+      result[type].push(Math.round(price / surface));
+    }
+  }
+  return result;
+}
+
 export default function MarktkaartPage() {
   const [deals, setDeals] = useState<DealPin[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeStage, setActiveStage] = useState<string | null>(null);
   const [activeLayers, setActiveLayers] = useState<string[]>(["objecten"]);
   const [selectedDeal, setSelectedDeal] = useState<DealPin | null>(null);
+  const [selectedCity, setSelectedCity] = useState<SelectedCity | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -62,7 +96,7 @@ export default function MarktkaartPage() {
       const [dealsRes, viewingsRes] = await Promise.all([
         supabase
           .from("deals")
-          .select("id, address, city, stage, agreed_price, asking_price, lat, lng, buyer_id")
+          .select("id, address, city, stage, agreed_price, asking_price, lat, lng, buyer_id, surface, property_type")
           .not("lat", "is", null)
           .not("lng", "is", null),
         supabase.from("viewings").select("deal_id"),
@@ -78,6 +112,8 @@ export default function MarktkaartPage() {
         lat: number;
         lng: number;
         buyer_id: string | null;
+        surface: number | null;
+        property_type: string | null;
       }>;
 
       const viewings = (viewingsRes.data ?? []) as Array<{ deal_id: string }>;
@@ -97,6 +133,8 @@ export default function MarktkaartPage() {
         lng: d.lng,
         has_buyer: Boolean(d.buyer_id),
         viewing_count: viewingCounts[d.id] ?? 0,
+        surface: d.surface,
+        property_type: d.property_type,
       }));
 
       setDeals(mapped);
@@ -107,19 +145,54 @@ export default function MarktkaartPage() {
 
   const filtered = activeStage ? deals.filter((d) => d.stage === activeStage) : deals;
 
-  // City average price and representative coords for heatmap
-  const cityData: Record<string, { prices: number[]; lat: number; lng: number }> = {};
+  // Build city €/m² data
+  const cityM2Map: Record<string, {
+    eurPerM2s: number[];
+    lat: number;
+    lng: number;
+    cityDeals: DealPin[];
+    prices: number[];
+  }> = {};
   for (const d of deals) {
-    const price = d.agreed_price ?? d.asking_price;
     if (!d.city) continue;
-    if (!cityData[d.city]) cityData[d.city] = { prices: [], lat: d.lat, lng: d.lng };
-    if (price) cityData[d.city].prices.push(price);
+    if (!cityM2Map[d.city]) cityM2Map[d.city] = { eurPerM2s: [], lat: d.lat, lng: d.lng, cityDeals: [], prices: [] };
+    cityM2Map[d.city].cityDeals.push(d);
+    const price = d.agreed_price ?? d.asking_price ?? 0;
+    if (price > 0) {
+      const surface = d.surface ?? 100;
+      cityM2Map[d.city].eurPerM2s.push(price / surface);
+      cityM2Map[d.city].prices.push(price);
+    }
   }
-  const cityAvg: Record<string, number> = {};
+
+  const cityAvg: Record<string, number> = {}; // avg €/m²
   const cityCoords: Record<string, { lat: number; lng: number }> = {};
-  for (const [city, { prices, lat, lng }] of Object.entries(cityData)) {
-    cityCoords[city] = { lat, lng };
-    if (prices.length) cityAvg[city] = prices.reduce((a, b) => a + b, 0) / prices.length;
+  for (const [city, data] of Object.entries(cityM2Map)) {
+    cityCoords[city] = { lat: data.lat, lng: data.lng };
+    if (data.eurPerM2s.length) {
+      cityAvg[city] = data.eurPerM2s.reduce((a, b) => a + b, 0) / data.eurPerM2s.length;
+    }
+  }
+
+  function handleSelectCity(city: string) {
+    const data = cityM2Map[city];
+    if (!data) return;
+    const prices = data.prices;
+    setSelectedCity({
+      city,
+      eurPerM2: Math.round(cityAvg[city] ?? 0),
+      count: data.cityDeals.length,
+      minPrice: prices.length ? Math.min(...prices) : 0,
+      maxPrice: prices.length ? Math.max(...prices) : 0,
+      avgPrice: prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0,
+      byType: groupByType(data.cityDeals),
+    });
+    setSelectedDeal(null);
+  }
+
+  function handleSelectDeal(deal: DealPin | null) {
+    setSelectedDeal(deal);
+    setSelectedCity(null);
   }
 
   const totalValue = filtered.reduce((s, d) => s + (d.agreed_price ?? d.asking_price ?? 0), 0);
@@ -134,6 +207,13 @@ export default function MarktkaartPage() {
       prev.includes(key) ? prev.filter((l) => l !== key) : [...prev, key]
     );
   }
+
+  // Deal panel €/m² comparison
+  const dealPrice = selectedDeal ? (selectedDeal.agreed_price ?? selectedDeal.asking_price ?? 0) : 0;
+  const dealEurM2 = dealPrice > 0 ? Math.round(dealPrice / (selectedDeal?.surface ?? 100)) : 0;
+  const cityAvgM2 = selectedDeal?.city ? Math.round(cityAvg[selectedDeal.city] ?? 0) : 0;
+  const m2Diff = dealEurM2 - cityAvgM2;
+  const m2DiffPct = cityAvgM2 > 0 ? Math.round((m2Diff / cityAvgM2) * 100) : 0;
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: "DM Sans, Helvetica Neue, sans-serif" }}>
@@ -206,21 +286,11 @@ export default function MarktkaartPage() {
             deals={filtered}
             stageColors={STAGE_COLORS}
             activeLayers={activeLayers}
-            onSelectDeal={setSelectedDeal}
+            onSelectDeal={handleSelectDeal}
+            onSelectCity={handleSelectCity}
             cityAvg={cityAvg}
             cityCoords={cityCoords}
           />
-        )}
-
-        {/* Prijskaart disclaimer */}
-        {activeLayers.includes("prijzen") && !loading && (
-          <div style={{
-            position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 1000,
-            background: "rgba(15,23,42,0.8)", color: "#fff", borderRadius: 8, padding: "6px 14px",
-            fontSize: 11, fontWeight: 500, whiteSpace: "nowrap", pointerEvents: "none",
-          }}>
-            Prijsheatmap gebaseerd op gemiddelde vraag-/transactieprijzen per stad
-          </div>
         )}
 
         {/* Legend */}
@@ -228,7 +298,7 @@ export default function MarktkaartPage() {
           <div style={{
             position: "absolute", bottom: 24, left: 56, zIndex: 1000,
             background: "rgba(255,255,255,0.96)", borderRadius: 10,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.1)", padding: "12px 14px", minWidth: 148,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.1)", padding: "12px 14px", minWidth: 152,
           }}>
             {activeLayers.includes("objecten") && (
               <div style={{ marginBottom: activeLayers.length > 1 ? 10 : 0 }}>
@@ -245,7 +315,7 @@ export default function MarktkaartPage() {
               </div>
             )}
             {activeLayers.includes("kopers") && (
-              <div style={{ marginBottom: activeLayers.filter(l => l !== "objecten" && l !== "kopers").length > 0 ? 10 : 0 }}>
+              <div style={{ marginBottom: (activeLayers.includes("bezichtigingen") || activeLayers.includes("prijzen")) ? 10 : 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>Kopers</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", display: "inline-block" }} />
@@ -264,25 +334,87 @@ export default function MarktkaartPage() {
             )}
             {activeLayers.includes("prijzen") && (
               <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>Prijszone</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Prijszone (€/m²)</div>
                 {[
-                  { label: "< €200k", color: "#22c55e" },
-                  { label: "< €400k", color: "#eab308" },
-                  { label: "< €600k", color: "#f97316" },
-                  { label: "≥ €600k", color: "#ef4444" },
+                  { label: "< €2.000/m²",          color: "#16a34a" },
+                  { label: "€2.000 – €2.500/m²",   color: "#eab308" },
+                  { label: "€2.500 – €3.000/m²",   color: "#f97316" },
+                  { label: "> €3.000/m²",           color: "#ef4444" },
                 ].map((item) => (
-                  <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: item.color, display: "inline-block" }} />
-                    <span style={{ fontSize: 11, color: "#0f172a" }}>{item.label}</span>
+                  <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: item.color, display: "inline-block", flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, color: "#64748b" }}>{item.label}</span>
                   </div>
                 ))}
+                <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 8, marginTop: 8, fontSize: 9, color: "#94a3b8", fontStyle: "italic", lineHeight: 1.4 }}>
+                  Gebaseerd op eigen transacties.<br />
+                  Marktbrede data via Brainbay API.
+                </div>
               </div>
             )}
           </div>
         )}
 
+        {/* City detail panel (takes priority) */}
+        {selectedCity && (
+          <div style={{
+            position: "absolute", bottom: 24, right: 24, zIndex: 1000,
+            width: 280, background: "#fff", borderRadius: 14,
+            border: "1px solid #e8ecf0",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden",
+          }}>
+            <div style={{ background: "#0f172a", padding: "12px 16px", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{selectedCity.city}</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 1 }}>Prijsoverzicht</div>
+              </div>
+              <button
+                onClick={() => setSelectedCity(null)}
+                style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ padding: "14px 16px" }}>
+              {/* Gem €/m² */}
+              <div style={{ fontSize: 20, fontWeight: 800, color: getPrijsColor(selectedCity.eurPerM2), marginBottom: 10 }}>
+                €{selectedCity.eurPerM2.toLocaleString("nl-NL")}/m²
+              </div>
+              {/* Stats grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+                {[
+                  { label: "TRANSACTIES", value: String(selectedCity.count) },
+                  { label: "GEM. PRIJS", value: formatEuro(selectedCity.avgPrice) },
+                  { label: "LAAGSTE", value: formatEuro(selectedCity.minPrice) },
+                  { label: "HOOGSTE", value: formatEuro(selectedCity.maxPrice) },
+                ].map((stat) => (
+                  <div key={stat.label} style={{ background: "#f8fafc", borderRadius: 8, padding: 8 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>{stat.label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{stat.value}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Per type */}
+              {Object.keys(selectedCity.byType).length > 0 && (
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Per woningtype</div>
+                  {Object.entries(selectedCity.byType).map(([type, m2Vals]) => {
+                    const avg = Math.round(m2Vals.reduce((a, b) => a + b, 0) / m2Vals.length);
+                    return (
+                      <div key={type} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #f8fafc" }}>
+                        <span style={{ fontSize: 12, color: "#64748b", textTransform: "capitalize" }}>{type}</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#0f172a" }}>€{avg.toLocaleString("nl-NL")}/m²</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Selected deal panel */}
-        {selectedDeal && (
+        {selectedDeal && !selectedCity && (
           <div style={{
             position: "absolute", bottom: 24, right: 24, zIndex: 1000,
             width: 280, background: "#fff", borderRadius: 12,
@@ -301,16 +433,32 @@ export default function MarktkaartPage() {
             </div>
             <div style={{ padding: "14px 16px" }}>
               {selectedDeal.city && (
-                <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10 }}>{selectedDeal.city}</div>
+                <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>{selectedDeal.city}</div>
               )}
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: STAGE_COLORS[selectedDeal.stage] ?? "#94a3b8", display: "inline-block", flexShrink: 0 }} />
                 <span style={{ fontSize: 12, fontWeight: 600, color: "#0f172a", textTransform: "capitalize" }}>{selectedDeal.stage}</span>
               </div>
-              {(selectedDeal.agreed_price ?? selectedDeal.asking_price) != null && (
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#0284c7", marginBottom: 10 }}>
-                  {formatEuro((selectedDeal.agreed_price ?? selectedDeal.asking_price)!)}
-                </div>
+              {dealPrice > 0 && (
+                <>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#0284c7", marginBottom: 4 }}>
+                    {formatEuro(dealPrice)}
+                  </div>
+                  {dealEurM2 > 0 && (
+                    <div style={{ fontSize: 11, color: "#64748b", marginBottom: 10 }}>
+                      €{dealEurM2.toLocaleString("nl-NL")}/m²
+                      {cityAvgM2 > 0 && (
+                        <span style={{ marginLeft: 4, color: m2Diff > 0 ? "#ef4444" : m2Diff < 0 ? "#16a34a" : "#94a3b8", fontWeight: 600 }}>
+                          {m2Diff > 0
+                            ? ` · +${m2DiffPct}% boven gem. ${selectedDeal.city}`
+                            : m2Diff < 0
+                            ? ` · ${Math.abs(m2DiffPct)}% onder gem. ${selectedDeal.city}`
+                            : ` · Gem. prijs ${selectedDeal.city}`}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
               {(selectedDeal.has_buyer || selectedDeal.viewing_count > 0) && (
                 <div style={{ display: "flex", gap: 10, fontSize: 11, color: "#64748b", marginBottom: 14 }}>
